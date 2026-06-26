@@ -14,6 +14,7 @@ const path = require('path');
 const fs = require('fs');
 const multer = require('multer');
 const cookieParser = require('cookie-parser');
+const cache = require('./src/utils/cache');
 const helmet = require('helmet');
 
 // 加载 .env (本地开发用, 生产环境由进程管理器/systemd 注入环境变量)
@@ -62,6 +63,8 @@ async function initDB() {
     // 阶段 4: 暴露给 auth 路由用 (避免循环依赖)
     app.locals.prisma = prisma;
     console.log('Prisma 客户端连接成功');
+    cache.init(process.env.REDIS_URL);
+    console.log('Redis 缓存初始化' + (cache.isConnected() ? ' (已连接)' : ' (不可用, 降级直查 MySQL)'));
   } else {
     pool = mysql.createPool(dbConfig);
     const conn = await pool.getConnection();
@@ -186,6 +189,17 @@ function handleApiError(res, err, label) {
 // 阶段 4: pool 模式应急回退用 admin (id=1) — 阶段 5 移除 pool 时一起删
 const POOL_FALLBACK_USER_ID = 1;
 
+
+// ==================== 缓存失效辅助 ====================
+function invalidateNoteCache(userId, noteId) {
+  const keys = ['cat_tree:user:' + userId];
+  if (noteId) keys.push('note:' + noteId);
+  cache.del(...keys).catch(() => {});
+}
+function invalidateCategoryCache(userId) {
+  cache.del('cat_tree:user:' + userId).catch(() => {});
+}
+
 // ==================== 笔记 API ====================
 
 // 获取笔记列表（支持搜索和分类过滤）
@@ -277,6 +291,7 @@ app.post('/api/notes', async (req, res) => {
     if (USE_PRISMA) {
       const prisma = prismaModule.getPrisma();
       const note = await require('./prisma/dal').createNote(req.user.id, req.body, prisma);
+      invalidateNoteCache(req.user.id);
       return res.status(201).json(note);
     }
     const { title, content, category_ids } = req.body;
@@ -303,6 +318,7 @@ app.put('/api/notes/:id', async (req, res) => {
     if (USE_PRISMA) {
       const prisma = prismaModule.getPrisma();
       const note = await require('./prisma/dal').updateNote(req.user.id, req.params.id, req.body, prisma);
+      invalidateNoteCache(req.user.id, req.params.id);
       return res.json(note);
     }
     const { title, content, is_pinned, category_ids } = req.body;
@@ -340,7 +356,9 @@ app.delete('/api/notes/:id', async (req, res) => {
   try {
     if (USE_PRISMA) {
       const prisma = prismaModule.getPrisma();
-      return res.json(await require('./prisma/dal').deleteNote(req.user.id, req.params.id, prisma));
+      const result = await require('./prisma/dal').deleteNote(req.user.id, req.params.id, prisma);
+      invalidateNoteCache(req.user.id, req.params.id);
+      return res.json(result);
     }
     await pool.query('DELETE FROM notes WHERE id = ?', [req.params.id]);
     res.json({ message: '删除成功' });
@@ -415,6 +433,7 @@ app.post('/api/categories', async (req, res) => {
     if (USE_PRISMA) {
       const prisma = prismaModule.getPrisma();
       const cat = await require('./prisma/dal').createCategory(req.user.id, req.body, prisma);
+      invalidateCategoryCache(req.user.id);
       return res.status(201).json(cat);
     }
     const { name, color, parent_id } = req.body;
@@ -440,6 +459,7 @@ app.put('/api/categories/:id', async (req, res) => {
     if (USE_PRISMA) {
       const prisma = prismaModule.getPrisma();
       const cat = await require('./prisma/dal').updateCategory(req.user.id, req.params.id, req.body, prisma);
+      invalidateCategoryCache(req.user.id);
       return res.json(cat);
     }
     const { name, color, parent_id } = req.body;
@@ -474,7 +494,9 @@ app.delete('/api/categories/:id', async (req, res) => {
   try {
     if (USE_PRISMA) {
       const prisma = prismaModule.getPrisma();
-      return res.json(await require('./prisma/dal').deleteCategory(req.user.id, req.params.id, prisma));
+      const result = await require('./prisma/dal').deleteCategory(req.user.id, req.params.id, prisma);
+      invalidateCategoryCache(req.user.id);
+      return res.json(result);
     }
     const catId = parseInt(req.params.id);
     const [children] = await pool.query('SELECT COUNT(*) AS n FROM categories WHERE parent_id = ?', [catId]);
@@ -506,9 +528,11 @@ initDB()
 // 优雅关闭 (Prisma 模式专有, pool 模式不需)
 process.on('SIGTERM', async () => {
   if (USE_PRISMA && prismaModule) await prismaModule.disconnect();
+  await cache.disconnect();
   process.exit(0);
 });
 process.on('SIGINT', async () => {
   if (USE_PRISMA && prismaModule) await prismaModule.disconnect();
+  await cache.disconnect();
   process.exit(0);
 });

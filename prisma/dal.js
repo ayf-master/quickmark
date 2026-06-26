@@ -11,6 +11,7 @@
  *   - 401/403 抛带 statusCode 的 Error, server.js 统一处理
  */
 const { Prisma } = require('@prisma/client');
+const cache = require('../src/utils/cache');
 
 // ==================== 用户 (User) ====================
 
@@ -119,12 +120,15 @@ async function listNotes(userId, { search, category_id, pinned }, prisma) {
 
 /** GET /api/notes/:id — 单条笔记 (鉴权后只能看自己) */
 async function getNote(userId, id, prisma) {
-  const note = await prisma.note.findUnique({
-    where: { id: parseInt(id) },
-    include: { categories: { include: { category: true } } }
+  const noteId = parseInt(id);
+  return cache.wrap('note:' + noteId, 600, async () => {
+    const note = await prisma.note.findUnique({
+      where: { id: noteId },
+      include: { categories: { include: { category: true } } }
+    });
+    if (!note || note.userId !== userId) return null;
+    return formatNote(note);
   });
-  if (!note || note.userId !== userId) return null;  // 越权返回 null
-  return formatNote(note);
 }
 
 /** POST /api/notes — 创建笔记 */
@@ -240,7 +244,8 @@ async function deleteNote(userId, id, prisma) {
 
 /** GET /api/categories — 当前用户的全部分类 (扁平 + note_count 含后代) */
 async function listCategories(userId, prisma) {
-  const rows = await prisma.category.findMany({
+  return cache.wrap('cat_tree:user:' + userId, 300, async () => {
+    const rows = await prisma.category.findMany({
     where: { userId },  // 阶段 4: 多用户隔离
     orderBy: [{ parentId: { sort: 'asc', nulls: 'first' } }, { name: 'asc' }]
   });
@@ -255,6 +260,7 @@ async function listCategories(userId, prisma) {
     updated_at: r.updatedAt,
     note_count: countMap[r.id] || 0
   }));
+  });
 }
 
 /** POST /api/categories — 创建分类 */
