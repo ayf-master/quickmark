@@ -1,0 +1,10 @@
+node_modules
+.git
+.env
+.env.*
+uploads
+dist
+test
+.workbuddy
+*.log
+.DS_Store
