@@ -39,7 +39,7 @@ function requireEnv(name) {
   return value;
 }
 
-requireEnv('DB_PASSWORD');
+if (!USE_PRISMA) requireEnv('DB_PASSWORD');
 // 阶段 4 鉴权: JWT secret 必填 (D2 方案)
 require('./prisma/auth').requireJwtSecret();
 
