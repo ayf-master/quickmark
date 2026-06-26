@@ -127,7 +127,12 @@ if (USE_PRISMA) {
   });
 }
 
-app.use(express.static(path.join(__dirname, 'public')));
+// 生产模式: 优先服务 Vite 构建产物 (dist/)
+const distDir = path.join(__dirname, "dist");
+if (fs.existsSync(distDir)) {
+  app.use(express.static(distDir));
+}
+app.use(express.static(path.join(__dirname, "public")));
 
 // ==================== 图片上传 (双模式都走 multer) ====================
 
@@ -531,6 +536,17 @@ app.delete('/api/categories/:id', async (req, res) => {
     handleApiError(res, err, '删除分类');
   }
 });
+
+// ==================== SPA 路由回退 ====================
+// Vite 构建产物存在时, 所有非 API / 非静态资源请求返回 index.html
+if (fs.existsSync(distDir)) {
+  app.get("*", (req, res) => {
+    if (req.path.startsWith("/api") || req.path.startsWith("/uploads")) {
+      return res.status(404).json({ error: "Not found" });
+    }
+    res.sendFile(path.join(distDir, "index.html"));
+  });
+}
 
 // ==================== 启动 ====================
 
