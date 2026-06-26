@@ -27,6 +27,11 @@ export default defineConfig({
       '/uploads': { target: 'http://localhost:3000', changeOrigin: true }
     }
   },
+  test: {
+    environment: 'happy-dom',
+    globals: true,
+    include: ['src/**/*.test.js', 'test/unit/**/*.test.js']
+  },
   build: {
     outDir: 'dist',
     emptyOutDir: true
