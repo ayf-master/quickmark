@@ -15,6 +15,7 @@ const fs = require('fs');
 const multer = require('multer');
 const cookieParser = require('cookie-parser');
 const cache = require('./src/utils/cache');
+const logger = require('./src/utils/logger');
 const helmet = require('helmet');
 
 // 加载 .env (本地开发用, 生产环境由进程管理器/systemd 注入环境变量)
@@ -24,15 +25,15 @@ const app = express();
 const PORT = process.env.PORT || 3000;
 const USE_PRISMA = process.env.USE_PRISMA === '1';
 
-console.log(`[启动] USE_PRISMA = ${USE_PRISMA ? 'ON (走 ORM)' : 'OFF (走 pool)'}`);
+logger.info(`[启动] USE_PRISMA = ${USE_PRISMA ? 'ON (走 ORM)' : 'OFF (走 pool)'}`);
 
 // ==================== 启动校验 ====================
 function requireEnv(name) {
   const value = process.env[name];
   if (!value || value.trim() === '') {
-    console.error(`\n❌ 缺少环境变量: ${name}`);
-    console.error(`   请在 .env 文件中设置, 或从运行环境注入`);
-    console.error(`   参考 .env.example\n`);
+    logger.error(`\n❌ 缺少环境变量: ${name}`);
+    logger.error(`   请在 .env 文件中设置, 或从运行环境注入`);
+    logger.error(`   参考 .env.example\n`);
     process.exit(1);
   }
   return value;
@@ -62,13 +63,13 @@ async function initDB() {
     await prisma.$queryRaw`SELECT 1`;
     // 阶段 4: 暴露给 auth 路由用 (避免循环依赖)
     app.locals.prisma = prisma;
-    console.log('Prisma 客户端连接成功');
+    logger.info('Prisma 客户端连接成功');
     cache.init(process.env.REDIS_URL);
-    console.log('Redis 缓存初始化' + (cache.isConnected() ? ' (已连接)' : ' (不可用, 降级直查 MySQL)'));
+    logger.info('Redis 缓存初始化' + (cache.isConnected() ? ' (已连接)' : ' (不可用, 降级直查 MySQL)'));
   } else {
     pool = mysql.createPool(dbConfig);
     const conn = await pool.getConnection();
-    console.log('MySQL 连接成功 (pool 模式)');
+    logger.info('MySQL 连接成功 (pool 模式)');
     conn.release();
   }
 }
@@ -83,6 +84,26 @@ app.use(helmet({
 }));
 
 // 阶段 4: 鉴权中间件 (解析 cookie → req.user, 不强制登录)
+
+
+// 请求日志中间件
+app.use((req, res, next) => {
+  const start = Date.now();
+  res.on('finish', () => {
+    const duration = Date.now() - start;
+    if (req.path.startsWith('/api/')) {
+      logger.info({
+        method: req.method,
+        url: req.originalUrl,
+        status: res.statusCode,
+        duration: duration + 'ms',
+        userId: req.user ? req.user.id : null
+      }, req.method + ' ' + req.originalUrl + ' ' + res.statusCode);
+    }
+  });
+  next();
+});
+
 app.use(require('./prisma/auth').attachUser);
 
 // 阶段 4: 挂载 /api/auth 路由 (login/refresh/logout/me/register)
@@ -146,7 +167,7 @@ app.post('/api/upload', upload.single('file'), (req, res) => {
       mimetype: req.file.mimetype
     });
   } catch (err) {
-    console.error('上传失败:', err);
+    logger.error('上传失败:', err);
     res.status(500).json({ error: '上传失败' });
   }
 });
@@ -156,7 +177,7 @@ app.use((err, req, res, next) => {
     return res.status(400).json({ error: '上传错误: ' + err.message });
   }
   if (err) {
-    console.error('请求错误:', err.message);
+    logger.error('请求错误:', err.message);
     return res.status(400).json({ error: err.message });
   }
   next();
@@ -181,7 +202,7 @@ app.get('/api/health', async (req, res) => {
 // ==================== 通用错误处理 ====================
 
 function handleApiError(res, err, label) {
-  console.error(`${label} 失败:`, err);
+  logger.error(`${label} 失败:`, err);
   const status = err.statusCode || 500;
   res.status(status).json({ error: err.message || `${label}失败` });
 }
@@ -502,7 +523,7 @@ app.delete('/api/categories/:id', async (req, res) => {
     const [children] = await pool.query('SELECT COUNT(*) AS n FROM categories WHERE parent_id = ?', [catId]);
     const [notes] = await pool.query('SELECT COUNT(DISTINCT note_id) AS n FROM note_categories WHERE category_id = ?', [catId]);
     if (children[0].n > 0 || notes[0].n > 0) {
-      console.log(`删除分类 ${catId}: 含 ${children[0].n} 个子分类, ${notes[0].n} 个笔记关联`);
+      logger.info(`删除分类 ${catId}: 含 ${children[0].n} 个子分类, ${notes[0].n} 个笔记关联`);
     }
     await pool.query('DELETE FROM categories WHERE id = ?', [catId]);
     res.json({ message: '删除成功', child_count: children[0].n, note_count: notes[0].n });
@@ -516,12 +537,12 @@ app.delete('/api/categories/:id', async (req, res) => {
 initDB()
   .then(() => {
     app.listen(PORT, () => {
-      console.log(`QuickMark 笔记应用已启动: http://localhost:${PORT}`);
+      logger.info(`QuickMark 笔记应用已启动: http://localhost:${PORT}`);
     });
   })
   .catch(err => {
-    console.error('数据库连接失败:', err.message);
-    console.log('请先运行: npm run init-db');
+    logger.error('数据库连接失败:', err.message);
+    logger.info('请先运行: npm run init-db');
     process.exit(1);
   });
 

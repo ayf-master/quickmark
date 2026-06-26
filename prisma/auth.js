@@ -46,9 +46,9 @@ const COOKIE_CSRF = 'qm_csrf';
 
 function requireJwtSecret() {
   if (!JWT_SECRET || JWT_SECRET.trim().length < 32) {
-    console.error('\n❌ JWT_SECRET 未设置或长度不足 (至少 32 字符)');
-    console.error('   方案 D2: 在 .env 加 JWT_SECRET=<32+ 位随机字符串>');
-    console.error('   生成方式: node -e "console.log(require(\'crypto\').randomBytes(48).toString(\'base64\'))"\n');
+    logger.error('\n❌ JWT_SECRET 未设置或长度不足 (至少 32 字符)');
+    logger.error('   方案 D2: 在 .env 加 JWT_SECRET=<32+ 位随机字符串>');
+    logger.error('   生成方式: node -e "logger.info(require(\'crypto\').randomBytes(48).toString(\'base64\'))"\n');
     process.exit(1);
   }
 }

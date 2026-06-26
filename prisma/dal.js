@@ -12,6 +12,7 @@
  */
 const { Prisma } = require('@prisma/client');
 const cache = require('../src/utils/cache');
+const logger = require('../src/utils/logger');
 
 // ==================== 用户 (User) ====================
 
@@ -372,7 +373,7 @@ async function deleteCategory(userId, id, prisma) {
     distinct: ['noteId']
   });
   if (childCount > 0 || noteCount.length > 0) {
-    console.log(`删除分类 ${catId}: 含 ${childCount} 个子分类, ${noteCount.length} 个笔记关联`);
+    logger.info(`删除分类 ${catId}: 含 ${childCount} 个子分类, ${noteCount.length} 个笔记关联`);
   }
   await prisma.category.delete({ where: { id: catId } });
   return { message: '删除成功', child_count: childCount, note_count: noteCount.length };
