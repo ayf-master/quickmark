@@ -1,0 +1,4 @@
+/* Tailwind 编译期入口 */
+@tailwind base;
+@tailwind components;
+@tailwind utilities;

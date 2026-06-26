@@ -1,0 +1,98 @@
+// QuickMark 数据库 schema (Prisma 定义)
+// 与 db/schema.sql + db/migration_v2_hierarchical.sql 保持字段/类型/约束一致
+// 阶段 4 启用: 加 User.notes / User.categories 反向关系, Note.userId / Category.userId
+// 注意: Prisma 5.x 自动创建 prisma_migrations 表 (运维/审计), 不需手写
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider     = "mysql"
+  url          = env("DATABASE_URL")
+  // 显式声明字符集, 避免 Prisma 默认 Latin1 (中文/Emoji 全乱码)
+  relationMode = "foreignKeys"
+}
+
+// ===== 分类表 (多级) =====
+// v1: id / name / color / created_at / updated_at / (uk_name)
+// v2 改造: 加 parent_id 自引用 FK, 删 uk_name, 加 (parent_id, name) 复合索引
+// v3 改造: 加 user_id, 鉴权后多用户隔离
+model Category {
+  id        Int      @id @default(autoincrement())
+  name      String   @db.VarChar(100)
+  color     String?  @default("#6366f1") @db.VarChar(7)
+  parentId  Int?     @map("parent_id")
+  userId    Int      @map("user_id")
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @default(now()) @updatedAt @map("updated_at")
+
+  // 自引用: 父分类删除时, 子分类一并删除 (级联)
+  parent   Category?  @relation("CategoryTree", fields: [parentId], references: [id], onDelete: Cascade)
+  children Category[] @relation("CategoryTree")
+
+  // 多用户隔离: 用户删除 → 分类一并删除 (级联)
+  owner User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  // 反向关联: 哪些笔记挂在这个分类下
+  notes NoteCategory[]
+
+  // 索引
+  @@index([parentId, name], name: "idx_parent_name")
+  @@index([userId], name: "idx_user_id")
+  @@map("categories")
+}
+
+// ===== 笔记表 =====
+model Note {
+  id        Int      @id @default(autoincrement())
+  title     String   @db.VarChar(255)
+  content   String?  @db.Text
+  isPinned  Boolean  @default(false) @map("is_pinned")
+  userId    Int      @map("user_id")
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @default(now()) @updatedAt @map("updated_at")
+
+  // 多用户隔离: 用户删除 → 笔记一并删除
+  owner User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  // 反向关联: 笔记挂哪些分类
+  categories NoteCategory[]
+
+  @@index([userId], name: "idx_user_id")
+  // FULLTEXT 索引 (title, content) — Prisma 不直接支持 FT, 用原生 SQL 迁移补
+  @@map("notes")
+}
+
+// ===== 笔记-分类关联表 (多对多) =====
+model NoteCategory {
+  noteId     Int @map("note_id")
+  categoryId Int @map("category_id")
+
+  // FK: 笔记删除 → 关联记录一并删; 分类删除 → 关联记录一并删
+  note     Note     @relation(fields: [noteId], references: [id], onDelete: Cascade)
+  category Category @relation(fields: [categoryId], references: [id], onDelete: Cascade)
+
+  @@id([noteId, categoryId])
+  @@index([categoryId], name: "idx_category_id")
+  @@map("note_categories")
+}
+
+// ===== 用户表 =====
+// 阶段 4 鉴权启用; 默认账号 admin / admin123 (在 4.5 注册时写库, 或手动 SQL 兜底)
+model User {
+  id           Int      @id @default(autoincrement())
+  username     String   @unique @db.VarChar(50)
+  email        String?  @unique @db.VarChar(255)
+  passwordHash String?  @map("password_hash") @db.VarChar(255)
+  displayName  String?  @map("display_name") @db.VarChar(100)
+  role         String   @default("user") @db.VarChar(20) // "admin" / "user"
+  isLocked     Boolean  @default(false) @map("is_locked")
+  createdAt    DateTime @default(now()) @map("created_at")
+  updatedAt    DateTime @default(now()) @updatedAt @map("updated_at")
+
+  notes      Note[]
+  categories Category[]
+
+  @@map("users")
+}

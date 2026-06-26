@@ -1,0 +1,36 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+  <meta name="theme-color" content="#5B8DEF">
+  <meta name="description" content="QuickMark - 轻量级笔记应用,响应式设计,支持 Markdown 快捷语法、主题切换、键盘快捷键">
+  <title>QuickMark - 快记</title>
+
+  <!-- 防 FOUC: 在 CSS 加载前根据 localStorage/系统偏好设置主题 -->
+  <script>
+    (function () {
+      try {
+        var saved = localStorage.getItem('quickmark-theme');
+        var theme = saved;
+        if (!theme) {
+          theme = window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light';
+        }
+        document.documentElement.setAttribute('data-theme', theme);
+      } catch (e) {
+        document.documentElement.setAttribute('data-theme', 'light');
+      }
+    })();
+  </script>
+
+  <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>⚡</text></svg>">
+  <link rel="stylesheet" href="/css/tokens.css">
+  <link rel="stylesheet" href="/css/style.css">
+  <!-- Tailwind 编译期 utility (flex / h-full / text-2xl / px-4 等) -->
+  <!-- 在 main.js 里 import, Vite 才走 PostCSS 编译 -->
+</head>
+<body id="app">
+  <div id="app-root"></div>
+  <script type="module" src="/src/main.js"></script>
+</body>
+</html>

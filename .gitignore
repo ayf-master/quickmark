@@ -1,0 +1,54 @@
+# ==================== 依赖 ====================
+node_modules/
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+pnpm-debug.log*
+
+# ==================== 环境配置 ====================
+# 真实配置不入库, 只入库 .env.example
+.env
+.env.local
+.env.*.local
+
+# ==================== 运行时生成 ====================
+# 上传文件 (阶段 1 之后会改用云存储)
+uploads/
+
+# 日志 (阶段 7 监控接入后会产生)
+logs/
+*.log
+
+# ==================== 构建产物 ====================
+# Vite 构建输出 (阶段 1 引入)
+dist/
+dist-ssr/
+*.local
+
+# ==================== 编辑器/IDE ====================
+.vscode/*
+!.vscode/extensions.json
+.idea/
+.DS_Store
+Thumbs.db
+*.suo
+*.ntvs*
+*.njsproj
+*.sln
+*.sw?
+
+# ==================== 测试 ====================
+coverage/
+.nyc_output/
+
+# ==================== 缓存 ====================
+.cache/
+.parcel-cache/
+.turbo/
+
+# 阶段 5 验证探针
+/prisma/verify-claim.js
+
+# 临时文件
+*.tmp
+.workbuddy/
