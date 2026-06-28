@@ -31,8 +31,8 @@
       </button>
     </div>
 
-    <!-- 搜索分类 (桌面端) -->
-    <div v-if="!store.isCompact" class="px-4 py-3 flex-shrink-0"
+    <!-- 搜索分类 (桌面+移动端) -->
+    <div class="px-4 flex-shrink-0" :class="store.isCompact ? 'py-4' : 'py-3'"
       style="border-bottom: 1px solid var(--border-default);">
       <div class="relative">
         <input type="text"

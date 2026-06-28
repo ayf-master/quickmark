@@ -28,8 +28,8 @@
           </svg>
         </button>
       </div>
-      <!-- 笔记搜索 (模糊匹配标题+内容) -->
-      <div class="relative mt-3">
+      <!-- 笔记搜索 (模糊匹配标题+内容, 桌面端显示) -->
+      <div v-if="store.isDesktop" class="relative mt-3">
         <input type="text"
           v-model="store.searchQuery"
           @input="store.onSearchInput()"
