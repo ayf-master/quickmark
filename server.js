@@ -64,7 +64,7 @@ async function initDB() {
     // 阶段 4: 暴露给 auth 路由用 (避免循环依赖)
     app.locals.prisma = prisma;
     logger.info('Prisma 客户端连接成功');
-    cache.init(process.env.REDIS_URL);
+    await cache.init(process.env.REDIS_URL);
     logger.info('Redis 缓存初始化' + (cache.isConnected() ? ' (已连接)' : ' (不可用, 降级直查 MySQL)'));
   } else {
     pool = mysql.createPool(dbConfig);

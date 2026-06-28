@@ -3,7 +3,7 @@ const Redis = require('ioredis');
 let client = null;
 let connected = false;
 
-function init(redisUrl) {
+async function init(redisUrl) {
   if (client) return client;
   try {
     client = new Redis(redisUrl || process.env.REDIS_URL || 'redis://localhost:6379', {
@@ -17,7 +17,15 @@ function init(redisUrl) {
     client.on('connect', () => { connected = true; });
     client.on('error', () => { connected = false; });
     client.on('close', () => { connected = false; });
-    client.connect().catch(() => { connected = false; });
+    // 3s 超时连接, 失败不阻塞启动
+    try {
+      await Promise.race([
+        client.connect(),
+        new Promise((_, reject) => setTimeout(() => reject(new Error('Redis connect timeout')), 3000))
+      ]);
+    } catch {
+      connected = false;
+    }
   } catch (e) {
     connected = false;
   }
