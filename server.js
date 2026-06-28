@@ -552,7 +552,7 @@ if (fs.existsSync(distDir)) {
 
 initDB()
   .then(() => {
-    app.listen(PORT, () => {
+    app.listen(PORT, "0.0.0.0", () => {
       logger.info(`QuickMark 笔记应用已启动: http://localhost:${PORT}`);
     });
   })
