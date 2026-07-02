@@ -1,0 +1,67 @@
+version: '3.8'
+
+services:
+  db:
+    image: mysql:8.0
+    container_name: quickmark-db
+    restart: always
+    environment:
+      MYSQL_ROOT_PASSWORD: ${DB_PASSWORD:-ayf147852369}
+      MYSQL_DATABASE: ${DB_NAME:-quickmark}
+      MYSQL_CHARACTER_SET_SERVER: utf8mb4
+      MYSQL_COLLATION_SERVER: utf8mb4_unicode_ci
+    volumes:
+      - mysql_data:/var/lib/mysql
+      - ./db/schema.sql:/docker-entrypoint-initdb.d/01-schema.sql:ro
+      - ./db/migration_v2_hierarchical.sql:/docker-entrypoint-initdb.d/02-hierarchical.sql:ro
+      - ./db/migration_v3_user_id.sql:/docker-entrypoint-initdb.d/03-user-id.sql:ro
+      - ./db/migration_v4_position.sql:/docker-entrypoint-initdb.d/04-position.sql:ro
+    ports:
+      - "127.0.0.1:3306:3306"
+    healthcheck:
+      test: ["CMD", "mysqladmin", "ping", "-h", "localhost"]
+      timeout: 10s
+      retries: 10
+
+  redis:
+    image: redis:7-alpine
+    container_name: quickmark-redis
+    restart: always
+    ports:
+      - "127.0.0.1:6379:6379"
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      timeout: 5s
+      retries: 5
+
+  app:
+    build: .
+    container_name: quickmark-app
+    restart: always
+    depends_on:
+      db:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    environment:
+      PORT: 3000
+      DB_HOST: db
+      DB_PORT: 3306
+      DB_USER: root
+      DB_PASSWORD: ${DB_PASSWORD:-ayf147852369}
+      DB_NAME: ${DB_NAME:-quickmark}
+      DATABASE_URL: mysql://root:${DB_PASSWORD:-ayf147852369}@db:3306/${DB_NAME:-quickmark}
+      JWT_SECRET: ${JWT_SECRET}
+      JWT_ISSUER: quickmark
+      JWT_AUDIENCE: quickmark-web
+      REDIS_URL: redis://redis:6379
+      LOG_LEVEL: info
+      ALLOW_REGISTER: "0"
+    ports:
+      - "3000:3000"
+    volumes:
+      - uploads:/app/uploads
+
+volumes:
+  mysql_data:
+  uploads:
