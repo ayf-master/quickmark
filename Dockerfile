@@ -2,18 +2,22 @@ FROM node:20-alpine
 
 WORKDIR /app
 
-# 先复制 schema 和 package.json
+# 先复制 schema 文件
 COPY prisma/schema.prisma ./prisma/
-COPY package.json ./
 
-# 安装依赖（跳过 postinstall）
+# 复制 package.json 并安装依赖
+COPY package.json ./
 RUN npm install --production --ignore-scripts
 
-# 复制剩余代码
-COPY . .
+# 单独安装 prisma 作为工具
+RUN npm install -g prisma
 
-# 生成 Prisma 客户端 + 构建前端
-RUN npx prisma generate && npm run build
+# 生成 Prisma 客户端
+RUN prisma generate --schema=prisma/schema.prisma
+
+# 复制剩余代码并构建
+COPY . .
+RUN npm run build
 
 EXPOSE 3000
 
