@@ -1,22 +1,19 @@
-FROM node:18-alpine
+FROM node:20-alpine
 
 WORKDIR /app
 
-# 复制 package.json（不用 lock 文件）
+# 先复制 schema 和 package.json
+COPY prisma/schema.prisma ./prisma/
 COPY package.json ./
 
-# 安装依赖
-RUN npm install --production
-RUN npm install -g prisma
+# 安装依赖（跳过 postinstall）
+RUN npm install --production --ignore-scripts
 
-# 复制代码
+# 复制剩余代码
 COPY . .
 
-# 构建前端
-RUN npm run build
-
-# 生成 Prisma 客户端
-RUN npx prisma generate
+# 生成 Prisma 客户端 + 构建前端
+RUN npx prisma generate && npm run build
 
 EXPOSE 3000
 
