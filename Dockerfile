@@ -1,12 +1,11 @@
 FROM node:18-alpine
 
-# 安装 mysql 客户端（用于健康检查）
-RUN apk add --no-cache mysql-client
-
 WORKDIR /app
 
+# 复制 package.json（不用 lock 文件）
+COPY package.json ./
+
 # 安装依赖
-COPY package.json package-lock.json ./
 RUN npm install --production
 RUN npm install -g prisma
 
@@ -19,10 +18,6 @@ RUN npm run build
 # 生成 Prisma 客户端
 RUN npx prisma generate
 
-# 入口脚本
-COPY docker-entrypoint.sh /entrypoint.sh
-RUN chmod +x /entrypoint.sh
-
 EXPOSE 3000
 
-ENTRYPOINT ["/entrypoint.sh"]
+CMD ["node", "server.js"]
