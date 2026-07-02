@@ -1,11 +1,11 @@
-// 工具函数: 检测内容是 HTML(富文本) 还是 Markdown
-// 规则: 含常见 HTML 标签 -> HTML, 否则视为 Markdown
+// 工具函数: 检测内容是 HTML 还是纯文本/Markdown
+// 规则: 含常见 HTML 标签 -> 用 markdown 模式 (原本为富文本), 否则用纯文本
 export function detectContentMode(content) {
-  if (!content) return 'rich';
+  if (!content) return 'plain';
   if (/<(p|div|br|b|i|u|strong|em|ul|ol|li|h[1-6]|a|img|blockquote|pre|code|span)\b/i.test(content)) {
-    return 'rich';
+    return 'markdown';
   }
-  return 'markdown';
+  return 'plain';
 }
 
 // 工具函数: 上传图片, 返回 Promise<string> (url)

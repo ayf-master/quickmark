@@ -393,6 +393,33 @@ app.delete('/api/notes/:id', async (req, res) => {
   }
 });
 
+// 批量更新笔记排序
+app.patch('/api/notes/reorder', async (req, res) => {
+  try {
+    const { ids } = req.body;
+    if (!Array.isArray(ids)) return res.status(400).json({ error: 'ids 必须是数组' });
+    if (USE_PRISMA) {
+      const prisma = prismaModule.getPrisma();
+      const dal = require('./prisma/dal');
+      for (let i = 0; i < ids.length; i++) {
+        await prisma.note.updateMany({
+          where: { id: ids[i], userId: req.user.id },
+          data: { position: i }
+        });
+      }
+      invalidateNoteCache(req.user.id);
+      return res.json({ success: true });
+    }
+    // raw SQL path
+    for (let i = 0; i < ids.length; i++) {
+      await pool.query('UPDATE notes SET `position` = ? WHERE id = ? AND user_id = ?', [i, ids[i], req.user.id]);
+    }
+    res.json({ success: true });
+  } catch (err) {
+    handleApiError(res, err, '笔记排序');
+  }
+});
+
 // ==================== 分类 API ====================
 
 // 工具: 获取一个分类及其所有后代 id (BFS, 防环)
@@ -534,6 +561,31 @@ app.delete('/api/categories/:id', async (req, res) => {
     res.json({ message: '删除成功', child_count: children[0].n, note_count: notes[0].n });
   } catch (err) {
     handleApiError(res, err, '删除分类');
+  }
+});
+
+// 批量更新分类排序 (同级)
+app.patch('/api/categories/reorder', async (req, res) => {
+  try {
+    const { ids } = req.body;
+    if (!Array.isArray(ids)) return res.status(400).json({ error: 'ids 必须是数组' });
+    if (USE_PRISMA) {
+      const prisma = prismaModule.getPrisma();
+      for (let i = 0; i < ids.length; i++) {
+        await prisma.category.updateMany({
+          where: { id: ids[i], userId: req.user.id },
+          data: { position: i }
+        });
+      }
+      invalidateCategoryCache(req.user.id);
+      return res.json({ success: true });
+    }
+    for (let i = 0; i < ids.length; i++) {
+      await pool.query('UPDATE categories SET `position` = ? WHERE id = ? AND user_id = ?', [i, ids[i], req.user.id]);
+    }
+    res.json({ success: true });
+  } catch (err) {
+    handleApiError(res, err, '分类排序');
   }
 });
 

@@ -41,6 +41,7 @@
       <NewNoteDialog />
       <ShortcutHelp />
       <UserGuide />
+      <KnowledgeGraph />
       <Toast />
     </template>
   </div>
@@ -59,6 +60,7 @@ import ShortcutHelp from '@/components/ShortcutHelp.vue';
 import UserGuide from '@/components/UserGuide.vue';
 import Toast from '@/components/Toast.vue';
 import LoginView from '@/components/LoginView.vue';
+import KnowledgeGraph from '@/components/KnowledgeGraph.vue';
 import API from '@/api/index.js';
 
 const authChecked = ref(false);

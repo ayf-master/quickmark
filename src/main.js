@@ -92,6 +92,12 @@ function globalKeydown(e) {
       store.openNewNoteDialog();
       return;
     }
+    // Ctrl+G / Cmd+G 打开知识图谱
+    if (mod && (e.key === 'g' || e.key === 'G')) {
+      e.preventDefault();
+      if (store.notes.length > 0) store.knowledgeGraphVisible = true;
+      return;
+    }
   }
 
   // ESC 关闭浮层 (优先级: 面板 > 抽屉 > 弹窗)

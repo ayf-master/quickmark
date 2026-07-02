@@ -198,6 +198,30 @@ const API = {
       throw new Error(err.error || '删除失败');
     }
     return resp.json();
+  },
+  async reorderNotes(ids) {
+    const resp = await authedFetch('/api/notes/reorder', {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ ids })
+    });
+    if (!resp.ok) {
+      const err = await resp.json().catch(() => ({ error: '排序失败' }));
+      throw new Error(err.error || '排序失败');
+    }
+    return resp.json();
+  },
+  async reorderCategories(ids) {
+    const resp = await authedFetch('/api/categories/reorder', {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ ids })
+    });
+    if (!resp.ok) {
+      const err = await resp.json().catch(() => ({ error: '排序失败' }));
+      throw new Error(err.error || '排序失败');
+    }
+    return resp.json();
   }
 };
 

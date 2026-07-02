@@ -249,5 +249,30 @@ input[type="color"]::-webkit-color-swatch {
   }
 }
 
+/* ===== Annotation styles (plain text overlay + markdown preview) ===== */
+.qm-annot { display: inline; }
+.qm-highlight {
+  padding: 0 2px;
+  border-radius: 2px;
+}
+.qm-underline {
+  text-decoration: underline;
+  text-decoration-color: var(--color-primary);
+  text-underline-offset: 2px;
+}
+.qm-comment {
+  cursor: help;
+  border-bottom: 1px dashed var(--color-accent);
+}
+.qm-comment:hover {
+  background: var(--color-accent-subtle);
+}
+.qm-cmt-marker {
+  font-size: 9px;
+  margin-left: 1px;
+  vertical-align: super;
+  line-height: 0;
+}
+
 /* ===== Responsive breakpoints ===== */
 /* Mobile first; large screens opt into multi-column */

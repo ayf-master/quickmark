@@ -1,9 +1,12 @@
 <template>
   <div>
-    <div
+    <div draggable="true"
       @click="$emit('select', node)"
-      class="w-full text-left px-2 py-1.5 rounded-lg text-sm flex items-center justify-between transition-all mb-0.5 group category-row min-w-0 overflow-hidden"
-      :class="{ 'is-selected': store.selectedCategoryId === node.id }">
+      @dragstart="onDragStart"
+      @dragover.prevent="onDragOver"
+      @drop.prevent="onDrop"
+      @dragend="onDragEnd"
+      :class="['w-full text-left px-2 py-1.5 rounded-lg text-sm flex items-center justify-between transition-all mb-0.5 group category-row min-w-0 overflow-hidden', { 'is-selected': store.selectedCategoryId === node.id, 'cat-dragging': dragging, 'cat-drop-here': dropHere }]">
       <span class="flex items-center gap-1.5 min-w-0 flex-1">
         <!-- 展开/折叠箭头 -->
         <button v-if="node.children && node.children.length > 0"
@@ -90,13 +93,77 @@
 </template>
 
 <script setup>
+import { ref } from 'vue';
 import { store } from '@/store';
+import API from '@/api/index.js';
 
-defineProps({
+const props = defineProps({
   node: { type: Object, required: true },
   depth: { type: Number, default: 0 }
 });
-defineEmits(['select', 'create-child', 'edit', 'delete', 'toggle-expand']);
+const emit = defineEmits(['select', 'create-child', 'edit', 'delete', 'toggle-expand', 'drag-cat-start', 'drag-cat-over', 'drag-cat-drop', 'drag-cat-end']);
+
+const dragging = ref(false);
+const dropHere = ref(false);
+
+let dragCatId = null;
+
+function onDragStart(e) {
+  dragging.value = true;
+  dragCatId = props.node.id;
+  e.dataTransfer.effectAllowed = 'move';
+  e.dataTransfer.setData('text/plain', String(props.node.id));
+  emit('drag-cat-start', props.node.id);
+}
+
+function onDragOver(e) {
+  if (dragCatId && dragCatId !== props.node.id) {
+    dropHere.value = true;
+    emit('drag-cat-over', props.node.id);
+  }
+}
+
+async function onDrop(e) {
+  dropHere.value = false;
+  const fromId = dragCatId;
+  const toId = props.node.id;
+  if (!fromId || fromId === toId) return;
+  // 只重排与目标同级的分类, 在 store.categories 中直接操作
+  const targetCat = store.categories.find(c => c.id === toId);
+  if (!targetCat) return;
+  const parentId = targetCat.parent_id;
+  // 找出所有同级分类, 按当前顺序排列
+  const siblingIds = store.categories
+    .filter(c => c.parent_id === parentId)
+    .sort((a, b) => a.position - b.position)
+    .map(c => c.id);
+  const fromIdx = siblingIds.indexOf(fromId);
+  const toIdx = siblingIds.indexOf(toId);
+  if (fromIdx < 0 || toIdx < 0) return;
+  // 重新排列 ID 顺序
+  siblingIds.splice(fromIdx, 1);
+  const insertAt = fromIdx < toIdx ? toIdx - 1 : toIdx;
+  siblingIds.splice(insertAt, 0, fromId);
+  // 更新 store.categories 中所有同级分类的 position
+  siblingIds.forEach((id, i) => {
+    const cat = store.categories.find(c => c.id === id);
+    if (cat) cat.position = i;
+  });
+  store.categories = [...store.categories];
+  store.categoryListVersion = Date.now();
+  try {
+    await API.reorderCategories(siblingIds);
+  } catch (err) {
+    store.loadCategories();
+  }
+}
+
+function onDragEnd() {
+  dragging.value = false;
+  dropHere.value = false;
+  dragCatId = null;
+  emit('drag-cat-end');
+}
 </script>
 
 <style scoped>
@@ -153,5 +220,23 @@ defineEmits(['select', 'create-child', 'edit', 'delete', 'toggle-expand']);
   opacity: 1;
   transform: scale(1);
   pointer-events: auto;
+}
+.cat-dragging {
+  opacity: 0.4 !important;
+}
+.cat-drop-here {
+  position: relative;
+  transform: translateX(6px);
+}
+.cat-drop-here::after {
+  content: '';
+  position: absolute;
+  left: 8px;
+  right: 8px;
+  bottom: -3px;
+  height: 2px;
+  background: var(--color-primary);
+  border-radius: 1px;
+  opacity: 0.6;
 }
 </style>

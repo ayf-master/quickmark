@@ -1,6 +1,7 @@
 <template>
-  <section class="flex flex-col h-full relative"
-    :style="panelStyle"
+  <div class="notelist-container" :style="containerStyle">
+  <section class="flex flex-col h-full"
+    style="overflow: hidden; width: 100%;"
     role="region"
     aria-label="笔记列表">
     <!-- Header: 搜索 + 标题 + 收藏过滤 -->
@@ -25,6 +26,17 @@
           <svg class="w-4 h-4" fill="currentColor" viewBox="0 0 24 24"
             :style="{ color: store.showPinnedOnly ? 'var(--color-accent)' : 'currentColor' }">
             <path d="M16 12V4h1V2H7v2h1v8l-2 2v2h5.2v6h1.6v-6H18v-2l-2-2z"/>
+          </svg>
+        </button>
+        <button v-if="store.isDesktop"
+          class="btn btn-icon-sm btn-ghost flex-shrink-0"
+          @click="store.noteListCollapsed = !store.noteListCollapsed"
+          :title="store.noteListCollapsed ? '展开列表' : '折叠列表'">
+          <svg v-if="!store.noteListCollapsed" class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M11 19l-7-7 7-7m8 14l-7-7 7-7"/>
+          </svg>
+          <svg v-else class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 5l7 7-7 7M5 5l7 7-7 7"/>
           </svg>
         </button>
       </div>
@@ -58,13 +70,20 @@
     <!-- List / Empty -->
     <div class="flex-1 panel-scroll px-4 py-4">
       <template v-if="Array.isArray(store.filteredNotes) && store.filteredNotes.length > 0">
-        <NoteCard
-          v-for="note in store.filteredNotes"
+        <div v-for="note in store.filteredNotes"
           :key="note.id"
-          :note="note"
-          :is-selected="store.editingNote && store.editingNote.id === note.id"
-          @select="store.openNote(note)"
-          @delete="store.deleteNoteFromList(note)" />
+          draggable="true"
+          @dragstart="onNoteDragStart($event, note.id)"
+          @dragover.prevent="onNoteDragOver($event, note.id)"
+          @drop.prevent="onNoteDrop($event, note.id)"
+          @dragend="onNoteDragEnd"
+          :class="{ 'note-dragging': dragNoteId === note.id, 'note-drop-here': dragOverNoteId === note.id }">
+          <NoteCard
+            :note="note"
+            :is-selected="store.editingNote && store.editingNote.id === note.id"
+            @select="store.openNote(note)"
+            @delete="store.deleteNoteFromList(note)" />
+        </div>
         <div class="h-4"></div>
       </template>
       <template v-else>
@@ -111,28 +130,88 @@
       </button>
     </div>
   </section>
+  <!-- 展开按钮 (贴在右侧边缘) -->
+  <button v-if="store.isDesktop && store.noteListCollapsed"
+    class="notelist-expand-btn"
+    @click="store.noteListCollapsed = false"
+    title="展开列表">
+    <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+      <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 5l7 7-7 7M5 5l7 7-7 7"/>
+    </svg>
+  </button>
+  </div>
 </template>
 
 <script setup>
 import { computed, ref, onMounted } from 'vue';
 import { store } from '@/store';
+import API from '@/api/index.js';
 import NoteCard from '@/components/NoteCard.vue';
 
-const panelStyle = computed(() => {
-  // 桌面端固定宽度, 平板/移动端占满
+const containerStyle = computed(() => {
   if (store.isDesktop) {
+    const collapsed = store.noteListCollapsed;
     return {
-      width: 'var(--list-width)',
+      width: collapsed ? '0px' : 'var(--list-width)',
       flexShrink: '0',
-      background: 'var(--bg-panel)',
-      borderRight: '1px solid var(--border-default)'
+      position: 'relative',
+      overflow: 'visible',
+      transition: 'width 0.2s ease',
+      borderRight: '1px solid var(--border-default)',
+      background: 'var(--bg-panel)'
     };
   }
   return {
     flex: '1',
-    background: 'var(--bg-panel)'
+    background: 'var(--bg-panel)',
+    position: 'relative'
   };
 });
+
+// ===== 拖拽排序 =====
+const dragNoteId = ref(null);
+const dragOverNoteId = ref(null);
+
+function onNoteDragStart(e, id) {
+  dragNoteId.value = id;
+  e.dataTransfer.effectAllowed = 'move';
+}
+
+function onNoteDragOver(e, id) {
+  if (dragNoteId.value && dragNoteId.value !== id) {
+    dragOverNoteId.value = id;
+  }
+}
+
+async function onNoteDrop(e, id) {
+  const fromId = dragNoteId.value;
+  const toId = id;
+  dragOverNoteId.value = null;
+  if (!fromId || fromId === toId) return;
+  // 从 store 取出笔记列表，重新排序
+  const sorted = store.notes.slice(); // 浅拷贝
+  const fromIdx = sorted.findIndex(n => n.id === fromId);
+  const toIdx = sorted.findIndex(n => n.id === toId);
+  if (fromIdx < 0 || toIdx < 0) return;
+  const [moved] = sorted.splice(fromIdx, 1);
+  const insertAt = fromIdx < toIdx ? toIdx - 1 : toIdx;
+  sorted.splice(insertAt, 0, moved);
+  // 更新 position 并写回 store
+  sorted.forEach((n, i) => { n.position = i; });
+  store.notes = sorted;
+  store.noteListVersion = Date.now(); // 触发 filteredNotes 重算
+  // 异步保存到后端
+  try {
+    await API.reorderNotes(sorted.map(n => n.id));
+  } catch (err) {
+    console.warn('排序保存失败:', err);
+  }
+}
+
+function onNoteDragEnd() {
+  dragNoteId.value = null;
+  dragOverNoteId.value = null;
+}
 
 // 提示: 数据空 + 没永久关闭 + 当次会话没关过 → 显示
 const hintDismissedThisSession = ref(false);
@@ -187,5 +266,53 @@ onMounted(() => {
 .btn-ghost.is-active {
   background: var(--color-accent-subtle) !important;
   color: var(--color-accent) !important;
+}
+.notelist-expand-btn {
+  position: absolute;
+  right: -20px;
+  top: 10px;
+  z-index: 35;
+  width: 20px;
+  height: 28px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: var(--bg-elevated);
+  border: 1px solid var(--border-default);
+  border-left: none;
+  border-radius: 0 6px 6px 0;
+  cursor: pointer;
+  color: var(--text-tertiary);
+  padding: 0;
+  transition: color 0.12s, background 0.12s;
+}
+.notelist-expand-btn:hover {
+  color: var(--text-primary);
+  background: var(--bg-hover);
+}
+.note-dragging {
+  opacity: 0.4;
+  transition: opacity 0.15s;
+}
+.note-drop-here {
+  position: relative;
+  transform: translateY(6px);
+  transition: transform 0.2s cubic-bezier(0.34, 1.56, 0.64, 1);
+}
+.note-drop-here::after {
+  content: '';
+  position: absolute;
+  left: 8px;
+  right: 8px;
+  bottom: -8px;
+  height: 3px;
+  background: var(--color-primary);
+  border-radius: 2px;
+  opacity: 0.6;
+  animation: dropPulse 0.8s ease-in-out infinite alternate;
+}
+@keyframes dropPulse {
+  from { opacity: 0.3; transform: scaleY(0.8); }
+  to { opacity: 0.7; transform: scaleY(1); }
 }
 </style>

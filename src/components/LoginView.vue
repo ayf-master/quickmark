@@ -47,7 +47,8 @@
             :disabled="loading"
             class="input"
             placeholder="请输入用户名"
-            required minlength="3" maxlength="32" />
+            required minlength="3" maxlength="32"
+            @keydown.enter.prevent="passwordInput?.focus()" />
         </div>
 
         <!-- 注册模式: 显示名称 (可选) -->
@@ -65,11 +66,13 @@
           <label class="block text-sm mb-1.5" style="color: var(--text-secondary);"
             for="login-password">{{ mode === 'register' ? '密码 (至少 6 位)' : '密码' }}</label>
           <input id="login-password" type="password" v-model="password"
+            ref="passwordInput"
             :autocomplete="mode === 'register' ? 'new-password' : 'current-password'"
             :disabled="loading"
             class="input"
             placeholder="请输入密码"
-            required :minlength="mode === 'register' ? 6 : 1" />
+            required :minlength="mode === 'register' ? 6 : 1"
+            @keydown.enter="onSubmit" />
         </div>
 
         <!-- 注册模式: 确认密码 -->
@@ -127,6 +130,7 @@ const password2 = ref('');
 const loading = ref(false);
 const errorMsg = ref(props.initialError);
 const usernameInput = ref(null);
+const passwordInput = ref(null);
 
 onMounted(() => {
   usernameInput.value?.focus();

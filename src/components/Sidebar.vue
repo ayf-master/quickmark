@@ -104,6 +104,25 @@
         @delete="store.deleteCategory"
         @toggle-expand="store.toggleCategoryExpanded" />
     </nav>
+
+    <!-- 底部: 知识图谱入口 -->
+    <div class="flex-shrink-0 px-3 pb-3" style="border-top: 1px solid var(--border-default);">
+      <button @click="store.knowledgeGraphVisible = true"
+        class="w-full flex items-center gap-2.5 px-3 py-2.5 mt-2 rounded-lg text-sm transition-all"
+        style="color: var(--text-secondary);"
+        @mouseenter="$el.style.background='var(--bg-hover)'"
+        @mouseleave="$el.style.background='transparent'">
+        <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <circle cx="8" cy="6" r="2" stroke-width="1.8"/>
+          <circle cx="16" cy="12" r="2" stroke-width="1.8"/>
+          <circle cx="10" cy="18" r="2" stroke-width="1.8"/>
+          <line x1="10" y1="7" x2="14" y2="11" stroke-width="1.5"/>
+          <line x1="14" y1="13" x2="11" y2="17" stroke-width="1.5"/>
+        </svg>
+        知识图谱
+        <span class="text-xs ml-auto" style="color: var(--text-tertiary);">⌘G</span>
+      </button>
+    </div>
   </aside>
 </template>
 

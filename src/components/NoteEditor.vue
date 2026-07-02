@@ -24,21 +24,21 @@
         <div v-if="store.editingNote" class="mode-switcher" role="tablist" aria-label="编辑器模式">
           <button
             role="tab"
-            :aria-selected="store.editMode === 'rich'"
-            :class="['mode-tab', { active: store.editMode === 'rich' }]"
-            @click="switchMode('rich')"
-            title="所见即所得 (Ctrl+Alt+R)">
+            :aria-selected="store.editMode === 'plain'"
+            :class="['mode-tab', { active: store.editMode === 'plain' }]"
+            @click="switchMode('plain')"
+            title="纯文本">
             <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"/>
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 7h16M4 12h16M4 17h16"/>
             </svg>
-            富文本
+            纯文本
           </button>
           <button
             role="tab"
             :aria-selected="store.editMode === 'markdown'"
             :class="['mode-tab', { active: store.editMode === 'markdown' }]"
             @click="switchMode('markdown')"
-            title="Markdown 编辑 (Ctrl+Alt+M)">
+            title="Markdown">
             <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
               <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 20l4-16m4 4l4 4-4 4M6 16l-4-4 4-4"/>
             </svg>
@@ -47,7 +47,7 @@
         </div>
       </div>
 
-      <!-- 右侧: 收藏 / 删除 -->
+      <!-- 右侧: 收藏 / 编辑分类 / 删除 -->
       <div class="flex items-center gap-1">
         <button class="btn btn-icon-sm btn-ghost"
           :class="{ 'is-active': store.editingNote && store.editingNote.is_pinned }"
@@ -60,6 +60,42 @@
             <path d="M16 12V4h1V2H7v2h1v8l-2 2v2h5.2v6h1.6v-6H18v-2l-2-2z"/>
           </svg>
         </button>
+        <div class="relative">
+          <button @click="categoryEditorVisible = !categoryEditorVisible"
+            class="btn btn-icon-sm btn-ghost"
+            :class="{ 'is-active': categoryEditorVisible }"
+            title="编辑分类"
+            aria-label="编辑分类">
+            <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M7 7h.01M7 3h5c.512 0 1.024.195 1.414.586l7 7a2 2 0 010 2.828l-7 7a2 2 0 01-2.828 0l-7-7A1.994 1.994 0 013 12V7a4 4 0 014-4z"/>
+            </svg>
+          </button>
+          <!-- 分类编辑浮层 -->
+          <div v-if="categoryEditorVisible"
+            class="absolute right-0 top-full mt-2 z-50 p-3 rounded-xl shadow-xl"
+            style="background: var(--bg-elevated); border: 1px solid var(--border-default); min-width: 200px;">
+            <div class="flex items-center justify-between mb-2">
+              <span class="text-xs font-semibold" style="color: var(--text-tertiary);">编辑分类</span>
+              <button @click="categoryEditorVisible = false" class="btn btn-icon-sm" style="color: var(--text-tertiary);">
+                <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"/>
+                </svg>
+              </button>
+            </div>
+            <div class="flex flex-wrap gap-2">
+              <template v-for="cat in store.categories" :key="cat.id">
+                <button
+                  @click="store.toggleNoteCategory(cat.id)"
+                  class="px-3 py-1 rounded-full text-xs border transition-all"
+                  :style="catStyle(cat)">
+                  {{ cat.name }}
+                </button>
+              </template>
+              <span v-if="store.categories.length === 0" class="text-xs"
+                style="color: var(--text-tertiary);">暂无分类,可在左侧新建</span>
+            </div>
+          </div>
+        </div>
         <button
           @click="store.deleteCurrentNote()"
           title="删除笔记"
@@ -70,7 +106,6 @@
             <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
               d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"/>
           </svg>
-          <span class="text-xs font-medium ml-1 hidden sm:inline">删除</span>
         </button>
       </div>
     </header>
@@ -89,18 +124,43 @@
           aria-label="笔记标题" />
       </div>
 
-      <!-- 分类标签选择 -->
-      <div class="px-4 sm:px-6 pb-3 flex items-center gap-2 flex-wrap">
-        <template v-for="cat in store.categories" :key="cat.id">
-          <button
-            @click="store.toggleNoteCategory(cat.id)"
-            class="px-3 py-1 rounded-full text-xs border transition-all"
-            :style="catStyle(cat)">
-            {{ cat.name }}
-          </button>
-        </template>
-        <span v-if="store.categories.length === 0" class="text-xs"
-          style="color: var(--text-tertiary);">暂无分类,可在左侧新建</span>
+      <!-- Wiki 链接编辑 -->
+      <div class="px-4 sm:px-6 pb-3 flex flex-col gap-2"
+        style="border-bottom: 1px solid var(--border-subtle);">
+        <div class="flex items-center gap-2 flex-wrap min-h-[28px]">
+          <span class="text-xs font-medium" style="color: var(--text-tertiary); width: 52px; flex-shrink: 0;">链接</span>
+          <template v-for="(link, i) in store.editLinks" :key="i">
+            <span class="inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-xs"
+              style="border: 1px solid var(--color-primary-border); color: var(--color-primary);">
+              <span class="cursor-pointer hover:underline" @click="openLinkNote(link.title)"
+                :title="'打开笔记: ' + link.title">{{ link.title }}</span>
+              <input
+                :ref="el => { if (el) annotationRefs[i] = el }"
+                v-model="link.annotation"
+                @blur="onAnnotationChange"
+                @keydown.enter="onAnnotationChange"
+                placeholder="标注"
+                class="bg-transparent outline-none text-xs"
+                style="color: var(--text-secondary); max-width: 100px;"
+                @click.stop
+                @mousedown.stop />
+              <button @click.stop="removeLink(i)" class="inline-flex items-center justify-center flex-shrink-0"
+                style="color: var(--text-tertiary);" title="移除链接">
+                <svg class="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"/>
+                </svg>
+              </button>
+            </span>
+          </template>
+          <input ref="linkInputRef"
+            v-model="linkInputText"
+            @keydown.enter.prevent="addLink"
+            @keydown.backspace="handleLinkBackspace"
+            @paste.prevent="handleLinkPaste"
+            placeholder="输入标题后回车添加链接..."
+            class="flex-1 min-w-[120px] bg-transparent text-xs outline-none"
+            style="color: var(--text-secondary);" />
+        </div>
       </div>
 
       <!-- 格式工具栏 (Markdown 模式显示更全) -->
@@ -108,31 +168,55 @@
         class="px-4 sm:px-6 pb-2 flex items-center gap-1 flex-wrap"
         style="border-top: 1px dashed var(--border-subtle); padding-top: 8px;">
         <div class="md-toolbar-group">
-          <button @click="toggleHeading(1)" class="md-tool" title="一级标题 (点 H1 切到 H2, 反复点可清除)">H1</button>
+          <button @click="toggleHeading(1)" class="md-tool" title="一级标题">H1</button>
           <button @click="toggleHeading(2)" class="md-tool" title="二级标题">H2</button>
           <button @click="toggleHeading(3)" class="md-tool" title="三级标题">H3</button>
         </div>
         <div class="md-toolbar-divider"></div>
         <div class="md-toolbar-group">
-          <button @click="mdWrap('**', '**', '粗体')" class="md-tool" title="粗体 (Ctrl+B)">
+          <button @click="toggleBold()" class="md-tool" title="粗体">
             <strong>B</strong>
           </button>
-          <button @click="mdWrap('*', '*', '斜体')" class="md-tool" title="斜体 (Ctrl+I)">
+          <button @click="toggleItalic()" class="md-tool" title="斜体">
             <em>I</em>
           </button>
-          <button @click="mdWrap('~~', '~~', '删除线')" class="md-tool" title="删除线">
+          <button @click="toggleStrikethrough()" class="md-tool" title="删除线">
             <s>S</s>
           </button>
         </div>
         <div class="md-toolbar-divider"></div>
         <div class="md-toolbar-group">
-          <button @click="mdInsertLine('- ', '', '列表项')" class="md-tool" title="无序列表">
+          <button @click="annotateUnderline()" class="md-tool" title="划线">
             <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 6h16M4 12h16M4 18h16"/>
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 4v6a6 6 0 0012 0V4M4 20h16"/>
             </svg>
           </button>
-          <button @click="mdInsertLine('1. ', '', '列表项')" class="md-tool" title="有序列表">
-            <span class="text-[10px] font-bold">1.</span>
+          <button @click="annotateHighlight(currentColor)" class="md-tool" title="高亮" :style="{ color: currentColor }">
+              <svg class="w-3.5 h-3.5" fill="currentColor" viewBox="0 0 24 24">
+                <path d="M6 20l4-4 2 2 4-4-4-4 2-2 4 4 2-2-8-8-10 10 4 4zm2-10l4-4 2 2-4 4-2-2z"/>
+              </svg>
+            </button>
+            <label class="md-tool" title="选择颜色" style="cursor:pointer; min-width:20px; width:20px; padding:0;">
+              <span style="display:block; width:12px; height:12px; border-radius:2px; background:currentColor; border:1px solid var(--border-default);"></span>
+              <input type="color" class="hidden" :value="currentColor" @input="currentColor = $event.target.value" />
+            </label>
+          <button @click="annotateComment()" class="md-tool" title="批注">
+            <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M7 8h10M7 12h6m-4 8l-4 4V4a2 2 0 012-2h10a2 2 0 012 2v12a2 2 0 01-2 2H9l-3 3z"/>
+            </svg>
+          </button>
+        </div>
+        <div class="md-toolbar-divider"></div>
+        <div class="md-toolbar-group">
+          <button @click="toggleUnorderedList()" class="md-tool" title="无序列表">
+            <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 6h13M8 12h13M8 18h13M3.5 6h.01M3.5 12h.01M3.5 18h.01"/>
+            </svg>
+          </button>
+          <button @click="toggleOrderedList()" class="md-tool" title="有序列表">
+            <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 6h11M10 12h11M10 18h11M4 5.5v4M4 11.5v4M4 15.5l2 2.5M4 18h2.5"/>
+            </svg>
           </button>
           <button @click="mdInsert('> ', '', '引用')" class="md-tool" title="引用">
             <svg class="w-3.5 h-3.5" fill="currentColor" viewBox="0 0 24 24">
@@ -146,7 +230,7 @@
         </div>
         <div class="md-toolbar-divider"></div>
         <div class="md-toolbar-group">
-          <button @click="mdInsertLink()" class="md-tool" title="链接 (Ctrl+K)">
+          <button @click="mdInsertLink()" class="md-tool" title="链接">
             <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
               <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13.828 10.172a4 4 0 00-5.656 0l-4 4a4 4 0 105.656 5.656l1.102-1.101m-.758-4.899a4 4 0 005.656 0l4-4a4 4 0 00-5.656-5.656l-1.1 1.1"/>
             </svg>
@@ -177,55 +261,52 @@
           </svg>
           预览
         </button>
+
+        <div class="md-toolbar-divider"></div>
+        <div class="md-toolbar-group">
+          <button @click="undo" class="md-tool" title="撤销">
+            <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 10h10a5 5 0 010 10H9m0-10l4-4M9 6l-4 4"/>
+            </svg>
+          </button>
+          <button @click="redo" class="md-tool" title="重做">
+            <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 10H11a5 5 0 000 10h4m0-10l-4-4m4 4l-4 4"/>
+            </svg>
+          </button>
+        </div>
+        <div class="md-toolbar-divider"></div>
+        <div class="md-toolbar-group">
+          <button @click="store.knowledgeGraphVisible = true" class="md-tool" title="知识图谱">
+            <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <circle cx="8" cy="6" r="2" stroke-width="1.8"/>
+              <circle cx="16" cy="12" r="2" stroke-width="1.8"/>
+              <circle cx="10" cy="18" r="2" stroke-width="1.8"/>
+              <line x1="10" y1="7" x2="14" y2="11" stroke-width="1.5"/>
+              <line x1="14" y1="13" x2="11" y2="17" stroke-width="1.5"/>
+            </svg>
+          </button>
+        </div>
       </div>
 
-      <!-- 富文本模式工具栏 (精简) -->
-      <div v-else
+      <!-- 纯文本模式工具栏 (仅撤销) -->
+      <div v-if="store.editMode === 'plain'"
         class="px-4 sm:px-6 pb-2 flex items-center gap-1 flex-wrap"
         style="border-top: 1px dashed var(--border-subtle); padding-top: 8px;">
         <div class="md-toolbar-group">
-          <button @click="execCmd('bold')" class="md-tool" title="粗体 (Ctrl+B)"><strong>B</strong></button>
-          <button @click="execCmd('italic')" class="md-tool" title="斜体 (Ctrl+I)"><em>I</em></button>
-          <button @click="execCmd('underline')" class="md-tool" title="下划线 (Ctrl+U)"><u>U</u></button>
-          <button @click="execCmd('strikeThrough')" class="md-tool" title="删除线"><s>S</s></button>
-        </div>
-        <div class="md-toolbar-divider"></div>
-        <div class="md-toolbar-group">
-          <button @click="execCmd('insertUnorderedList')" class="md-tool" title="无序列表">
+          <button @click="undo" class="md-tool" title="撤销">
             <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 6h16M4 12h16M4 18h16"/>
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 10h10a5 5 0 010 10H9m0-10l4-4M9 6l-4 4"/>
             </svg>
           </button>
-          <button @click="execCmd('insertOrderedList')" class="md-tool" title="有序列表">
-            <span class="text-[10px] font-bold">1.</span>
-          </button>
-          <button @click="execCmd('formatBlock', 'blockquote')" class="md-tool" title="引用">
-            <svg class="w-3.5 h-3.5" fill="currentColor" viewBox="0 0 24 24">
-              <path d="M6 17h3l2-4V7H5v6h3l-2 4zm8 0h3l2-4V7h-6v6h3l-2 4z"/>
-            </svg>
-          </button>
-        </div>
-        <div class="md-toolbar-divider"></div>
-        <div class="md-toolbar-group">
-          <button @click="execCmd('createLink', prompt('链接地址:', 'https://') || '')" class="md-tool" title="插入链接">
+          <button @click="redo" class="md-tool" title="重做">
             <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13.828 10.172a4 4 0 00-5.656 0l-4 4a4 4 0 105.656 5.656l1.102-1.101"/>
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 10H11a5 5 0 000 10h4m0-10l-4-4m4 4l-4 4"/>
             </svg>
           </button>
-          <button @click="richInsertImage()" class="md-tool" title="插入图片" :disabled="store.editorImageUploading">
-            <svg v-if="!store.editorImageUploading" class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z"/>
-            </svg>
-            <svg v-else class="w-3.5 h-3.5 animate-spin" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <circle cx="12" cy="12" r="10" stroke-width="3" stroke-opacity="0.25"/>
-              <path d="M12 2a10 10 0 0110 10" stroke-width="3" stroke-linecap="round"/>
-            </svg>
-          </button>
-          <input ref="fileInputRich" type="file" accept="image/*" class="hidden" @change="onFileSelectedRich" />
         </div>
       </div>
-
-      <!-- 正文编辑区 -->
+<!-- 正文编辑区 -->
       <div class="px-4 sm:px-6 pb-6">
 
         <!-- Markdown 模式: 编辑 + 预览 -->
@@ -234,7 +315,7 @@
           <textarea
             v-model="store.editContent"
             ref="contentInput"
-            @keydown="handleMarkdownKeydown"
+            @keydown="handleEditorKeydown"
             @paste="handlePaste"
             :placeholder="store.editorImageUploading ? '图片上传中...' : '开始用 Markdown 记录...'"
             class="md-editor"
@@ -248,18 +329,23 @@
             aria-label="Markdown 实时预览"></div>
         </div>
 
-        <!-- 富文本模式: contenteditable -->
-        <div v-else
-          ref="richInput"
-          class="rich-editor"
-          contenteditable="true"
-          @input="onRichInput"
-          @paste="handleRichPaste"
-          @keydown="handleRichKeydown"
-          spellcheck="false"
-          :data-placeholder="store.editorImageUploading ? '图片上传中...' : '开始记录你的想法...'"
-          :aria-label="'富文本正文'"></div>
+        <!-- 纯文本模式: textarea 无格式 -->
+        <div v-else-if="store.editMode === 'plain'"
+          class="plain-pane">
+          <textarea
+            v-model="store.editContent"
+            ref="plainInput"
+            @keydown="handleEditorKeydown"
+            @paste="handlePlainPaste"
+            :placeholder="store.editorImageUploading ? '图片上传中...' : '开始记录...'"
+            class="plain-editor"
+            :aria-label="'纯文本正文'"
+            spellcheck="false"></textarea>
+        </div>
       </div>
+
+      <!-- 反向链接面板 -->
+      <BacklinkPanel v-if="store.editMode === 'markdown'" />
     </div>
 
     <!-- Footer stats -->
@@ -282,16 +368,175 @@
 </template>
 
 <script setup>
-import { ref, computed, watch, onBeforeUnmount, nextTick } from 'vue';
+import { ref, computed, watch, onBeforeUnmount, nextTick, onMounted } from 'vue';
 import markdownit from 'markdown-it';
 import { store } from '@/store';
 import { uploadImageFile } from '@/utils/content';
+import wikiPlugin from '@/utils/markdown-it-wiki';
+import { renderAnnotations } from '@/utils/markdown-it-annotations';
+import { findNoteByTitle } from '@/utils/wiki-link';
+import BacklinkPanel from '@/components/BacklinkPanel.vue';
 
 const titleInput = ref(null);
 const contentInput = ref(null);
-const richInput = ref(null);
+const plainInput = ref(null);
 const fileInput = ref(null);
-const fileInputRich = ref(null);
+const categoryEditorVisible = ref(false);
+const linkInputText = ref('');
+const linkInputRef = ref(null);
+const annotationRefs = ref({});
+
+// Wiki 链接编辑
+function addLink() {
+  const title = linkInputText.value.trim();
+  if (!title) return;
+  if (!store.editLinks.some(l => l.title === title)) {
+    store.editLinks.push({ title, annotation: '' });
+    store.scheduleAutoSave();
+  }
+  linkInputText.value = '';
+  nextTick(() => linkInputRef.value?.focus());
+}
+function removeLink(index) {
+  store.editLinks.splice(index, 1);
+  store.scheduleAutoSave();
+}
+function openLinkNote(title) {
+  const note = findNoteByTitle(store.notes, title);
+  if (note) store.openNote(note);
+}
+function handleLinkBackspace(e) {
+  if (linkInputText.value === '' && store.editLinks.length > 0) {
+    store.editLinks.pop();
+    store.scheduleAutoSave();
+  }
+}
+function handleLinkPaste(e) {
+  const text = e.clipboardData.getData('text/plain');
+  const titles = text.split(/[,，\n\r]+/).map(s => s.trim()).filter(Boolean);
+  for (const title of titles) {
+    if (!store.editLinks.some(l => l.title === title)) {
+      store.editLinks.push({ title, annotation: '' });
+    }
+  }
+  store.scheduleAutoSave();
+}
+// 标注修改后触发保存
+let annotationTimer = null;
+function onAnnotationChange() {
+  clearTimeout(annotationTimer);
+  annotationTimer = setTimeout(() => store.scheduleAutoSave(), 500);
+}
+
+// ===== 标注工具 =====
+const currentColor = ref('#ffeb3b');
+
+// 获取当前编辑器的 DOM 元素
+function getEditorEl() {
+  return store.editMode === 'plain' ? plainInput.value : contentInput.value;
+}
+
+// 在选区上包裹通用固定标签 (切换)
+function wrapAnnotation(openTag, closeTag) {
+  const el = getEditorEl();
+  if (!el) return;
+  el.focus();
+  const start = el.selectionStart;
+  const end = el.selectionEnd;
+  if (start === end) { store.showToast('请先选中文字', 'error'); return; }
+  const value = el.value;
+  const before = value.slice(0, start);
+  const selected = value.slice(start, end);
+  const after = value.slice(end);
+
+  // 检查选中内容本身是否已被包裹
+  if (selected.startsWith(openTag) && selected.endsWith(closeTag)) {
+    const inner = selected.slice(openTag.length, -closeTag.length);
+    el.value = before + inner + after;
+    el.setSelectionRange(start, start + inner.length);
+    el.dispatchEvent(new Event('input', { bubbles: true }));
+    return;
+  }
+  // 检查选中内容前后的上下文是否有包裹 (选中了标签内部的文字)
+  if (before.endsWith(openTag) && after.startsWith(closeTag)) {
+    const inner = value.slice(start, end);
+    el.value = before.slice(0, -openTag.length) + inner + after.slice(closeTag.length);
+    el.setSelectionRange(start - openTag.length, start - openTag.length + inner.length);
+    el.dispatchEvent(new Event('input', { bubbles: true }));
+    return;
+  }
+  // 包裹选中内容
+  el.value = before + openTag + selected + closeTag + after;
+  el.setSelectionRange(start + openTag.length, start + openTag.length + selected.length);
+  el.dispatchEvent(new Event('input', { bubbles: true }));
+}
+
+function annotateUnderline() {
+  wrapAnnotation('<qm-u>', '</qm-u>');
+}
+
+function annotateHighlight(color) {
+  if (!color) color = currentColor.value;
+  const el = getEditorEl();
+  if (!el) return;
+  el.focus();
+  const start = el.selectionStart;
+  const end = el.selectionEnd;
+  if (start === end) { store.showToast('请先选中文字', 'error'); return; }
+  const value = el.value;
+  const selected = value.slice(start, end);
+  const before = value.slice(0, start);
+  const after = value.slice(end);
+  // 检查是否已被高亮包裹: 前面紧贴 <qm-mark...> 后面紧贴 </qm-mark>
+  const ctxOpen = before.match(/<qm-mark[^>]*>$/);
+  if (ctxOpen && after.startsWith('</qm-mark>')) {
+    el.value = before.slice(0, -ctxOpen[0].length) + selected + after.slice(10);
+    el.setSelectionRange(start - ctxOpen[0].length, start - ctxOpen[0].length + selected.length);
+    el.dispatchEvent(new Event('input', { bubbles: true }));
+    return;
+  }
+  // 包裹
+  const tag = `<qm-mark color="${color}">`;
+  el.value = before + tag + selected + '</qm-mark>' + after;
+  el.setSelectionRange(start + tag.length, start + tag.length + selected.length);
+  el.dispatchEvent(new Event('input', { bubbles: true }));
+}
+
+function annotateComment() {
+  const el = getEditorEl();
+  if (!el) return;
+  el.focus();
+  const start = el.selectionStart;
+  const end = el.selectionEnd;
+  if (start === end) { store.showToast('请先选中文字', 'error'); return; }
+  const value = el.value;
+  const before = value.slice(0, start);
+  const selected = value.slice(start, end);
+  const after = value.slice(end);
+  // 选中内容已被批注 → 去掉
+  const cmtFull = selected.match(/^<qm-cmt\s+note="[^"]*">(.*)<\/qm-cmt>$/s);
+  if (cmtFull) {
+    el.value = before + cmtFull[1] + after;
+    el.setSelectionRange(start, start + cmtFull[1].length);
+    el.dispatchEvent(new Event('input', { bubbles: true }));
+    return;
+  }
+  // 上下文有批注 → 去掉
+  const cmtBefore = before.match(/<qm-cmt\s+note="[^"]*">$/);
+  if (cmtBefore && after.startsWith('</qm-cmt>')) {
+    el.value = before.slice(0, cmtBefore[0].length * -1) + selected + after.slice(10);
+    el.setSelectionRange(start - cmtBefore[0].length, start - cmtBefore[0].length + selected.length);
+    el.dispatchEvent(new Event('input', { bubbles: true }));
+    return;
+  }
+  // 新增批注
+  const note = window.prompt('批注内容:');
+  if (note === null || note.trim() === '') return;
+  const tag = `<qm-cmt note="${note.replace(/"/g, '&quot;').trim()}">`;
+  el.value = before + tag + selected + '</qm-cmt>' + after;
+  el.setSelectionRange(start + tag.length, start + tag.length + selected.length);
+  el.dispatchEvent(new Event('input', { bubbles: true }));
+}
 
 // markdown-it 实例
 const md = ref(null);
@@ -302,6 +547,7 @@ if (typeof markdownit === 'function') {
     typographer: true,
     breaks: true
   });
+  md.value.use(wikiPlugin);
 }
 
 const panelStyle = computed(() => {
@@ -311,12 +557,15 @@ const panelStyle = computed(() => {
   return { background: 'var(--bg-panel)' };
 });
 
-// 实时渲染 Markdown 预览 (安全包裹 try-catch)
+// 纯文本标注渲染 (将标注标签转为可见样式, 其余文本转义)
+
+
+// 实时渲染 Markdown 预览 + 标注 (安全包裹 try-catch)
 const renderedPreview = computed(() => {
   try {
     const src = store.editContent || '';
     if (!md.value) return '';
-    return md.value.render(src);
+    return renderAnnotations(md.value.render(src));
   } catch (e) {
     console.warn('Markdown 渲染失败:', e.message, '→ 回退原文');
     return '<pre style="white-space:pre-wrap;word-break:break-word">' +
@@ -341,19 +590,64 @@ function catStyle(cat) {
   };
 }
 
+// ===== 撤销 / 重做 (历史栈) =====
+let historyUndo = [];
+let historyRedo = [];
+let historySkipNext = false;
+let historyTimer = null;
+let historyReady = false;
+
+// 切换笔记时清空历史栈
+watch(() => store.editingNote?.id, () => {
+  historyUndo = [];
+  historyRedo = [];
+  historyReady = false;
+  nextTick(() => { historyReady = true; });
+});
+
+// 监听内容变化, 自动入栈 (带防抖合并连续输入)
+watch(() => store.editContent, (newVal, oldVal) => {
+  if (!historyReady || oldVal === undefined) return;
+  if (historySkipNext) { historySkipNext = false; return; }
+  clearTimeout(historyTimer);
+  historyTimer = setTimeout(() => {
+    historyUndo.push(oldVal);
+    historyRedo.length = 0;
+    if (historyUndo.length > 100) historyUndo.shift();
+  }, 400);
+});
+nextTick(() => { historyReady = true; });
+
+function undo() {
+  const ta = getEditorEl();
+  if (!ta || historyUndo.length === 0) return;
+  const current = store.editContent;
+  const prev = historyUndo.pop();
+  historyRedo.push(current);
+  historySkipNext = true;
+  store.editContent = prev;
+  ta.focus();
+}
+function redo() {
+  const ta = getEditorEl();
+  if (!ta || historyRedo.length === 0) return;
+  const current = store.editContent;
+  const next = historyRedo.pop();
+  historyUndo.push(current);
+  historySkipNext = true;
+  store.editContent = next;
+  ta.focus();
+}
+
 // ===== 模式切换 =====
 function switchMode(target) {
   if (store.editMode === target) return;
   if (!isAlive) return;
-  // 切换前同步当前模式的数据到 store
-  if (store.editMode === 'rich' && richInput.value) {
-    store.editContent = richInput.value.innerHTML || '';
-  }
   store.setEditMode(target);
   nextTick(() => {
     if (!isAlive) return;
-    if (target === 'rich' && richInput.value) {
-      richInput.value.innerHTML = store.editContent || '';
+    if (target === 'plain' && plainInput.value) {
+      plainInput.value.value = store.editContent || '';
     }
   });
 }
@@ -429,6 +723,91 @@ function toggleHeading(level) {
   ta.dispatchEvent(new Event('input', { bubbles: true }));
 }
 
+// 切换无序列表: 有前缀去掉, 无前缀加上
+function toggleUnorderedList() {
+  const ta = contentInput.value;
+  if (!ta) return;
+  ta.focus();
+  const start = ta.selectionStart;
+  const lineStart = ta.value.lastIndexOf('\n', start - 1) + 1;
+  const nlIdx = ta.value.indexOf('\n', start);
+  const lineEnd = nlIdx === -1 ? ta.value.length : nlIdx;
+  const currentLine = ta.value.slice(lineStart, lineEnd);
+  const m = currentLine.match(/^([-*+])\s+/);
+  if (m) {
+    const newLine = currentLine.slice(m[0].length);
+    ta.value = ta.value.slice(0, lineStart) + newLine + ta.value.slice(lineEnd);
+    ta.setSelectionRange(lineStart + newLine.length, lineStart + newLine.length);
+  } else {
+    ta.value = ta.value.slice(0, lineStart) + '- ' + currentLine + ta.value.slice(lineEnd);
+    ta.setSelectionRange(lineStart + 2 + currentLine.length, lineStart + 2 + currentLine.length);
+  }
+  ta.dispatchEvent(new Event('input', { bubbles: true }));
+}
+
+// 切换有序列表: 有前缀去掉, 无前缀加上编号
+function toggleOrderedList() {
+  const ta = contentInput.value;
+  if (!ta) return;
+  ta.focus();
+  const start = ta.selectionStart;
+  const lineStart = ta.value.lastIndexOf('\n', start - 1) + 1;
+  const nlIdx = ta.value.indexOf('\n', start);
+  const lineEnd = nlIdx === -1 ? ta.value.length : nlIdx;
+  const currentLine = ta.value.slice(lineStart, lineEnd);
+  const m = currentLine.match(/^(\d+)\.\s+/);
+  if (m) {
+    const newLine = currentLine.slice(m[0].length);
+    ta.value = ta.value.slice(0, lineStart) + newLine + ta.value.slice(lineEnd);
+    ta.setSelectionRange(lineStart + newLine.length, lineStart + newLine.length);
+  } else {
+    let num = 1;
+    if (lineStart > 0) {
+      const prevLineStart = ta.value.lastIndexOf('\n', lineStart - 2) + 1;
+      const prevLine = ta.value.slice(prevLineStart, lineStart - 1);
+      const prevNum = prevLine.match(/^(\d+)\.\s+/);
+      if (prevNum) num = parseInt(prevNum[1], 10) + 1;
+    }
+    const prefix = num + '. ';
+    ta.value = ta.value.slice(0, lineStart) + prefix + currentLine + ta.value.slice(lineEnd);
+    ta.setSelectionRange(lineStart + prefix.length + currentLine.length, lineStart + prefix.length + currentLine.length);
+  }
+  ta.dispatchEvent(new Event('input', { bubbles: true }));
+}
+
+// ===== 行内格式切换 (有标记去掉, 无标记加上) =====
+function toggleInline(prefix, suffix) {
+  const ta = contentInput.value;
+  if (!ta) return;
+  ta.focus();
+  const start = ta.selectionStart;
+  const end = ta.selectionEnd;
+  const before = ta.value.slice(0, start);
+  const selected = ta.value.slice(start, end);
+  const after = ta.value.slice(end);
+  if (start === end) {
+    // 无选区: 插入空标记, 光标放中间
+    ta.value = before + prefix + suffix + after;
+    ta.setSelectionRange(start + prefix.length, start + prefix.length);
+    ta.dispatchEvent(new Event('input', { bubbles: true }));
+    return;
+  }
+  // 检查是否已被包裹
+  if (selected.startsWith(prefix) && selected.endsWith(suffix) && selected.length > prefix.length + suffix.length) {
+    // 去掉包裹
+    const inner = selected.slice(prefix.length, -suffix.length);
+    ta.value = before + inner + after;
+    ta.setSelectionRange(start, start + inner.length);
+  } else {
+    ta.value = before + prefix + selected + suffix + after;
+    ta.setSelectionRange(start + prefix.length, start + prefix.length + selected.length);
+  }
+  ta.dispatchEvent(new Event('input', { bubbles: true }));
+}
+function toggleBold() { toggleInline('**', '**'); }
+function toggleItalic() { toggleInline('*', '*'); }
+function toggleStrikethrough() { toggleInline('~~', '~~'); }
+
 // 包裹选中文本
 function mdWrap(prefix, suffix, placeholder) {
   const ta = contentInput.value;
@@ -498,38 +877,6 @@ function mdInsertLink() {
   ta.dispatchEvent(new Event('input', { bubbles: true }));
 }
 
-// ===== 富文本模式操作 =====
-
-function execCmd(cmd, value) {
-  richInput.value?.focus();
-  // execCommand 已废弃但仍广泛支持
-  document.execCommand(cmd, false, value);
-  // 同步内容
-  if (richInput.value) store.editContent = richInput.value.innerHTML;
-}
-
-function richInsertImage() {
-  fileInputRich.value?.click();
-}
-async function onFileSelectedRich(e) {
-  const file = e.target.files?.[0];
-  e.target.value = '';
-  if (!file) return;
-  store.editorImageUploading = true;
-  try {
-    const url = await uploadImageFile(file);
-    execCmd('insertImage', url);
-  } catch (err) {
-    store.showToast('图片上传失败: ' + err.message, 'error');
-  } finally {
-    store.editorImageUploading = false;
-  }
-}
-
-function onRichInput() {
-  if (richInput.value) store.editContent = richInput.value.innerHTML;
-}
-
 // ===== 粘贴处理 =====
 async function handlePaste(e) {
   if (store.editMode !== 'markdown') return;
@@ -554,48 +901,75 @@ async function handlePaste(e) {
   }
 }
 
-async function handleRichPaste(e) {
-  const items = e.clipboardData?.items;
-  if (!items) return;
-  for (const item of items) {
-    if (item.kind === 'file' && item.type.startsWith('image/')) {
+// 纯文本滚动同步 (textarea → preview div)
+const plainPreviewRef = ref(null);
+function syncPlainScroll() {
+  const ta = plainInput.value;
+  const preview = plainPreviewRef.value;
+  if (ta && preview) {
+    preview.scrollTop = ta.scrollTop;
+    preview.scrollLeft = ta.scrollLeft;
+  }
+}
+
+// 纯文本粘贴: 只保留纯文本
+function handlePlainPaste(e) {
+  e.preventDefault();
+  const text = e.clipboardData?.getData('text/plain') || '';
+  if (!text) return;
+  const ta = plainInput.value;
+  if (!ta) return;
+  const start = ta.selectionStart;
+  const end = ta.selectionEnd;
+  const before = ta.value.slice(0, start);
+  const after = ta.value.slice(end);
+  ta.value = before + text + after;
+  const cursor = start + text.length;
+  ta.setSelectionRange(cursor, cursor);
+  ta.dispatchEvent(new Event('input', { bubbles: true }));
+}
+
+// ===== 编辑器键盘快捷键 =====
+function handleEditorKeydown(e) {
+  // Ctrl+Z/Y 撤销/重做 (所有模式)
+  if ((e.ctrlKey || e.metaKey) && !e.altKey) {
+    if (e.key === 'z' && !e.shiftKey) { e.preventDefault(); undo(); return; }
+    if (e.key === 'y' || (e.key === 'z' && e.shiftKey)) { e.preventDefault(); redo(); return; }
+  }
+
+  if (store.editMode !== 'markdown') return;
+  const ta = contentInput.value;
+  if (!ta) return;
+
+  // Enter: 在列表行按回车, 下一行继续列表
+  if (e.key === 'Enter' && !e.shiftKey) {
+    const start = ta.selectionStart;
+    const lineStart = ta.value.lastIndexOf('\n', start - 1) + 1;
+    const nlIdx = ta.value.indexOf('\n', start);
+    const lineEnd = nlIdx === -1 ? ta.value.length : nlIdx;
+    const currentLine = ta.value.slice(lineStart, lineEnd);
+    const ulMatch = currentLine.match(/^([-*+])\s+/);
+    const olMatch = currentLine.match(/^(\d+)\.\s+/);
+    if (ulMatch || olMatch) {
       e.preventDefault();
-      const file = item.getAsFile();
-      if (!file) return;
-      store.editorImageUploading = true;
-      try {
-        const url = await uploadImageFile(file);
-        execCmd('insertImage', url);
-      } catch (err) {
-        store.showToast('粘贴图片失败: ' + err.message, 'error');
-      } finally {
-        store.editorImageUploading = false;
+      const prefix = ulMatch ? ulMatch[0] : (parseInt(olMatch[1], 10) + 1) + '. ';
+      const content = currentLine.slice((ulMatch || olMatch)[0].length);
+      if (!content.trim()) {
+        // 空列表项 → 结束列表
+        ta.value = ta.value.slice(0, lineStart) + '\n' + ta.value.slice(lineEnd);
+        ta.setSelectionRange(lineStart + 1, lineStart + 1);
+      } else {
+        ta.value = ta.value.slice(0, lineEnd) + '\n' + prefix + ta.value.slice(lineEnd);
+        ta.setSelectionRange(lineEnd + 1 + prefix.length, lineEnd + 1 + prefix.length);
       }
+      ta.dispatchEvent(new Event('input', { bubbles: true }));
       return;
     }
   }
-  // 普通文本粘贴让浏览器处理,粘贴后同步内容
-  nextTick(() => {
-    if (richInput.value) store.editContent = richInput.value.innerHTML;
-  });
-}
 
-function handleRichKeydown(e) {
-  // Ctrl/Cmd+B/I/U 走原生 execCommand
-  if (!(e.ctrlKey || e.metaKey)) return;
-  const k = e.key.toLowerCase();
-  if (k === 'b') { e.preventDefault(); execCmd('bold'); }
-  else if (k === 'i') { e.preventDefault(); execCmd('italic'); }
-  else if (k === 'u') { e.preventDefault(); execCmd('underline'); }
-}
-
-// ===== Markdown 快捷语法 (行首 + 空格触发) =====
-function handleMarkdownKeydown(e) {
   if (!store.markdownAssistEnabled) return;
   if (e.key !== ' ') return;
-  if (store.editMode !== 'markdown') return;
 
-  const ta = e.target;
   const start = ta.selectionStart;
   const lineStart = ta.value.lastIndexOf('\n', start - 1) + 1;
   const prefix = ta.value.slice(lineStart, start);
@@ -627,7 +1001,21 @@ function handleMarkdownKeydown(e) {
 // 预览区点击链接: 阻止默认跳转,改为新窗口打开
 function handlePreviewClick(e) {
   const a = e.target.closest('a');
-  if (a && a.href) {
+  if (!a) return;
+  // Wiki 链接: 跳转到对应笔记
+  if (a.dataset.wikiLink) {
+    e.preventDefault();
+    const title = a.dataset.wikiLink;
+    const note = findNoteByTitle(store.notes, title);
+    if (note) {
+      store.openNote(note);
+    } else {
+      store.showToast('笔记「' + title + '」还不存在', 'error');
+    }
+    return;
+  }
+  // 普通链接: 新窗口打开
+  if (a.href) {
     e.preventDefault();
     window.open(a.href, '_blank', 'noopener');
   }
@@ -643,11 +1031,6 @@ const stopWatchNote = watch(
     if (!note || !isAlive) return;
     nextTick(() => {
       if (!isAlive) return;
-      if (richInput.value) {
-        if (store.editMode === 'rich') {
-          richInput.value.innerHTML = store.editContent || '';
-        }
-      }
       if (!note.title || note.title === '新笔记') {
         titleInput.value?.focus();
         titleInput.value?.select();
@@ -660,8 +1043,8 @@ const stopWatchMode = watch(() => store.editMode, (mode) => {
   if (!isAlive) return;
   nextTick(() => {
     if (!isAlive) return;
-    if (mode === 'rich' && richInput.value) {
-      richInput.value.innerHTML = store.editContent || '';
+    if (mode === 'plain' && plainInput.value) {
+      plainInput.value.value = store.editContent || '';
     }
   });
 });
@@ -673,13 +1056,13 @@ onBeforeUnmount(() => {
   document.removeEventListener('keydown', onKeydown);
 });
 
-// 全局快捷键: Ctrl+Alt+R/M 切模式
+// 全局快捷键: Ctrl+Alt+M/P 切模式
 function onKeydown(e) {
   if (!(e.ctrlKey || e.metaKey) || !e.altKey) return;
   if (!isAlive || !store.editingNote) return;
   const k = e.key.toLowerCase();
-  if (k === 'r') { e.preventDefault(); switchMode('rich'); }
-  else if (k === 'm') { e.preventDefault(); switchMode('markdown'); }
+  if (k === 'm') { e.preventDefault(); switchMode('markdown'); }
+  else if (k === 'p') { e.preventDefault(); switchMode('plain'); }
 }
 document.addEventListener('keydown', onKeydown);
 </script>
@@ -813,7 +1196,22 @@ document.addEventListener('keydown', onKeydown);
 .md-preview :deep(p) { margin: 8px 0; }
 .md-preview :deep(a) { color: var(--color-accent); text-decoration: none; }
 .md-preview :deep(a:hover) { text-decoration: underline; }
+.md-preview :deep(.wiki-link) {
+  color: var(--color-primary);
+  border-bottom: 1px dashed var(--color-primary-border);
+  cursor: pointer;
+  padding: 0 2px;
+  border-radius: 2px;
+  transition: background 0.12s;
+  text-decoration: none;
+}
+.md-preview :deep(.wiki-link:hover) {
+  background: var(--color-primary-subtle);
+  text-decoration: none;
+}
 .md-preview :deep(ul), .md-preview :deep(ol) { margin: 8px 0; padding-left: 24px; }
+.md-preview :deep(ul) { list-style-type: disc; }
+.md-preview :deep(ol) { list-style-type: decimal; }
 .md-preview :deep(li) { margin: 4px 0; }
 .md-preview :deep(blockquote) {
   margin: 8px 0;
@@ -869,54 +1267,14 @@ document.addEventListener('keydown', onKeydown);
   }
 }
 
-/* ===== Rich Editor (contenteditable) ===== */
-.rich-editor {
-  background: var(--bg-input, var(--bg-panel-2));
-  border: 1px solid var(--border-default);
-  border-radius: 8px;
-  padding: 14px 16px;
-  color: var(--text-primary);
-  font-size: 14.5px;
-  line-height: 1.75;
-  min-height: 50vh;
-  outline: none;
-  transition: border-color 0.15s;
-}
-.rich-editor:focus {
-  border-color: var(--color-accent);
-}
-.rich-editor:empty::before {
-  content: attr(data-placeholder);
-  color: var(--text-tertiary);
-  pointer-events: none;
-}
-.rich-editor h1, .rich-editor h2, .rich-editor h3 {
-  margin: 14px 0 8px;
-  font-weight: 700;
-}
-.rich-editor h1 { font-size: 22px; }
-.rich-editor h2 { font-size: 19px; }
-.rich-editor h3 { font-size: 17px; }
-.rich-editor p { margin: 6px 0; }
-.rich-editor ul, .rich-editor ol { margin: 6px 0; padding-left: 24px; }
-.rich-editor blockquote {
-  margin: 8px 0;
-  padding: 6px 12px;
-  border-left: 3px solid var(--color-accent);
-  background: var(--color-accent-subtle, rgba(91,141,239,0.08));
-}
-.rich-editor img {
-  max-width: 100%;
-  border-radius: 6px;
-  margin: 6px 0;
-}
-.rich-editor a { color: var(--color-accent); }
-
+/* ===== Plain Text Editor + Annotation Overlay ===== */
 .editor-fullscreen {
   position: fixed !important;
   inset: 0 !important;
   z-index: 40 !important;
 }
+
+
 .btn-ghost.is-active {
   background: var(--color-accent-subtle) !important;
   color: var(--color-accent) !important;
@@ -927,5 +1285,59 @@ button[aria-label="删除笔记"] {
 button[aria-label="删除笔记"]:hover {
   background: var(--color-danger-subtle, #FEE2E2) !important;
   color: var(--color-danger) !important;
+}
+/* ===== 标注样式 (:deep 穿透 v-html 内容) ===== */
+:deep(.md-preview .qm-underline),
+:deep(.plain-annot-preview .qm-underline) {
+  text-decoration: underline !important;
+  text-decoration-color: var(--color-primary) !important;
+  text-underline-offset: 2px;
+  border-bottom: 1px solid var(--color-primary) !important;
+  padding-bottom: 0;
+}
+:deep(.md-preview .qm-highlight),
+:deep(.plain-annot-preview .qm-highlight) {
+  padding: 0 2px;
+  border-radius: 2px;
+}
+:deep(.md-preview .qm-comment),
+:deep(.plain-annot-preview .qm-comment) {
+  cursor: help;
+  border-bottom: 1px dashed var(--color-accent);
+}
+:deep(.md-preview .qm-comment:hover),
+:deep(.plain-annot-preview .qm-comment:hover) {
+  background: var(--color-accent-subtle);
+}
+:deep(.md-preview .qm-cmt-marker),
+:deep(.plain-annot-preview .qm-cmt-marker) {
+  font-size: 9px;
+  margin-left: 1px;
+  vertical-align: super;
+  line-height: 0;
+}
+/* ===== Plain Text Editor ===== */
+.plain-pane {
+  display: flex;
+  min-height: 50vh;
+}
+.plain-editor {
+  flex: 1;
+  background: var(--bg-input, var(--bg-panel-2));
+  border: 1px solid var(--border-default);
+  border-radius: 8px;
+  padding: 14px 16px;
+  color: var(--text-primary);
+  font-family: ui-monospace, SFMono-Regular, "SF Mono", Menlo, Consolas, monospace;
+  font-size: 14.5px;
+  line-height: 1.75;
+  resize: none;
+  outline: none;
+  min-height: 50vh;
+  white-space: pre-wrap;
+  word-wrap: break-word;
+}
+.plain-editor:focus {
+  border-color: var(--color-accent);
 }
 </style>

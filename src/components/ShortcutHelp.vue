@@ -55,6 +55,13 @@ const groups = [
     ]
   },
   {
+    title: '编辑器模式',
+    items: [
+      { label: '切换纯文本模式', keys: ['Ctrl', 'Alt', 'P'] },
+      { label: '切换 Markdown 模式', keys: ['Ctrl', 'Alt', 'M'] }
+    ]
+  },
+  {
     title: '导航',
     items: [
       { label: '聚焦笔记搜索框', keys: ['Ctrl', 'K'] },

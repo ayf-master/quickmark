@@ -2,34 +2,34 @@ import { describe, it, expect } from 'vitest';
 import { detectContentMode } from '@/utils/content.js';
 
 describe('detectContentMode', () => {
-  it('returns rich for empty/null content', () => {
-    expect(detectContentMode('')).toBe('rich');
-    expect(detectContentMode(null)).toBe('rich');
-    expect(detectContentMode(undefined)).toBe('rich');
+  it('returns plain for empty/null content', () => {
+    expect(detectContentMode('')).toBe('plain');
+    expect(detectContentMode(null)).toBe('plain');
+    expect(detectContentMode(undefined)).toBe('plain');
   });
 
-  it('returns rich for HTML tags', () => {
-    expect(detectContentMode('<p>hello</p>')).toBe('rich');
-    expect(detectContentMode('<div>test</div>')).toBe('rich');
-    expect(detectContentMode('before <br> after')).toBe('rich');
-    expect(detectContentMode('<strong>bold</strong>')).toBe('rich');
-    expect(detectContentMode('<img src="x.png"/>')).toBe('rich');
-    expect(detectContentMode('<h1>Title</h1>')).toBe('rich');
-    expect(detectContentMode('<blockquote>quote</blockquote>')).toBe('rich');
-    expect(detectContentMode('<ul><li>item</li></ul>')).toBe('rich');
+  it('returns markdown for HTML tags', () => {
+    expect(detectContentMode('<p>hello</p>')).toBe('markdown');
+    expect(detectContentMode('<div>test</div>')).toBe('markdown');
+    expect(detectContentMode('before <br> after')).toBe('markdown');
+    expect(detectContentMode('<strong>bold</strong>')).toBe('markdown');
+    expect(detectContentMode('<img src="x.png"/>')).toBe('markdown');
+    expect(detectContentMode('<h1>Title</h1>')).toBe('markdown');
+    expect(detectContentMode('<blockquote>quote</blockquote>')).toBe('markdown');
+    expect(detectContentMode('<ul><li>item</li></ul>')).toBe('markdown');
   });
 
-  it('returns markdown for plain text', () => {
-    expect(detectContentMode('hello world')).toBe('markdown');
-    expect(detectContentMode('# Title')).toBe('markdown');
-    expect(detectContentMode('**bold**')).toBe('markdown');
-    expect(detectContentMode('- list item')).toBe('markdown');
-    expect(detectContentMode('> quote')).toBe('markdown');
+  it('returns plain for plain text', () => {
+    expect(detectContentMode('hello world')).toBe('plain');
+    expect(detectContentMode('# Title')).toBe('plain');
+    expect(detectContentMode('**bold**')).toBe('plain');
+    expect(detectContentMode('- list item')).toBe('plain');
+    expect(detectContentMode('> quote')).toBe('plain');
   });
 
   it('case insensitive HTML detection', () => {
-    expect(detectContentMode('<P>test</P>')).toBe('rich');
-    expect(detectContentMode('<DIV>test</DIV>')).toBe('rich');
-    expect(detectContentMode('<Span>test</Span>')).toBe('rich');
+    expect(detectContentMode('<P>test</P>')).toBe('markdown');
+    expect(detectContentMode('<DIV>test</DIV>')).toBe('markdown');
+    expect(detectContentMode('<Span>test</Span>')).toBe('markdown');
   });
 });

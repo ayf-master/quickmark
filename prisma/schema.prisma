@@ -24,6 +24,7 @@ model Category {
   color     String?  @default("#6366f1") @db.VarChar(7)
   parentId  Int?     @map("parent_id")
   userId    Int      @map("user_id")
+  position  Int      @default(0) @map("position")
   createdAt DateTime @default(now()) @map("created_at")
   updatedAt DateTime @default(now()) @updatedAt @map("updated_at")
 
@@ -49,6 +50,7 @@ model Note {
   title     String   @db.VarChar(255)
   content   String?  @db.Text
   isPinned  Boolean  @default(false) @map("is_pinned")
+  position  Int      @default(0) @map("position")
   userId    Int      @map("user_id")
   createdAt DateTime @default(now()) @map("created_at")
   updatedAt DateTime @default(now()) @updatedAt @map("updated_at")

@@ -114,7 +114,7 @@ async function listNotes(userId, { search, category_id, pinned }, prisma) {
   const rows = await prisma.note.findMany({
     where,
     include: { categories: { include: { category: true } } },
-    orderBy: [{ isPinned: 'desc' }, { updatedAt: 'desc' }]
+    orderBy: [{ isPinned: 'desc' }, { position: 'asc' }, { updatedAt: 'desc' }]
   });
   return rows.map(formatNote);
 }
@@ -248,7 +248,7 @@ async function listCategories(userId, prisma) {
   return cache.wrap('cat_tree:user:' + userId, 300, async () => {
     const rows = await prisma.category.findMany({
     where: { userId },  // 阶段 4: 多用户隔离
-    orderBy: [{ parentId: { sort: 'asc', nulls: 'first' } }, { name: 'asc' }]
+    orderBy: [{ parentId: { sort: 'asc', nulls: 'first' } }, { position: 'asc' }, { name: 'asc' }]
   });
   const allIds = rows.map(r => r.id);
   const countMap = await getCategoryNoteCounts(allIds, prisma);
@@ -392,6 +392,7 @@ function formatNote(note) {
     title: note.title,
     content: note.content,
     is_pinned: note.isPinned,
+    position: note.position || 0,
     created_at: note.createdAt,
     updated_at: note.updatedAt,
     category_ids: ids,

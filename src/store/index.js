@@ -4,6 +4,14 @@
 import { reactive, computed, watch } from 'vue';
 import API from '@/api/index.js';
 import { detectContentMode } from '@/utils/content.js';
+import {
+  parseWikiLinks,
+  findNoteByTitle,
+  buildLinkIndex,
+  findBacklinks,
+  findOutlinks,
+  buildGraphData
+} from '@/utils/wiki-link.js';
 
 // --- private timers ---
 let autoSaveTimer = null;
@@ -37,18 +45,22 @@ export const store = reactive({
   editTitle: '',
   editContent: '',
   editCategoryIds: [],
+  editLinks: [], // Wiki 链接标题列表
   markdownAssistEnabled: true,
-  editMode: 'rich', // 'rich' (富文本直接打字) | 'markdown' (Markdown + 预览)
+  editMode: 'plain', // 'plain' (纯文本) | 'markdown' (Markdown + 预览)
   // 编辑器 UI 状态
   editorPreviewVisible: true, // Markdown 模式下显示预览面板
   editorImageUploading: false, // 上传中标记 (防重复点击)
+  backlinkPanelVisible: true,  // 反向链接面板展开
+  knowledgeGraphVisible: false, // 知识图谱浮层
 
   // ===== Theme =====
   theme: 'light', // 'light' | 'dark'
 
   // ===== UI state =====
   mobileDrawerOpen: false,
-  sidebarCollapsed: false, // 桌面端侧边栏折叠 (v1.1: 多级分类挤不下时一键隐藏)
+  sidebarCollapsed: false, // 桌面端侧边栏折叠
+  noteListCollapsed: false, // 桌面端笔记列表折叠
   shortcutPanelVisible: false,
   userGuideVisible: false,
   showNewCategoryDialog: false,
@@ -79,8 +91,10 @@ export const store = reactive({
 
   allNotesCount: computed(() => store.notes.length),
 
-  // 分类树 (按 parent_id 嵌套, 顶级在前, 同级按 name 排序)
+  categoryListVersion: Date.now(),
+  // 分类树 (按 parent_id 嵌套, 顶级在前, 同级按 position 排序)
   categoryTree: computed(() => {
+    const _v = store.categoryListVersion;
     const all = store.categories || [];
     const byParent = new Map();
     for (const c of all) {
@@ -90,7 +104,7 @@ export const store = reactive({
     }
     function build(parentKey, depth) {
       const children = byParent.get(parentKey) || [];
-      children.sort((a, b) => a.name.localeCompare(b.name, 'zh-CN'));
+      children.sort((a, b) => (a.position || 0) - (b.position || 0));
       return children.map(c => ({
         ...c,
         depth,
@@ -189,7 +203,9 @@ export const store = reactive({
     return result;
   },
 
+  noteListVersion: Date.now(), // 拖拽排序后递增, 强制 filterNotes 重算
   filteredNotes: computed(() => {
+    const _v = store.noteListVersion; // 依赖版本号
     let list = store.notes;
     if (store.showPinnedOnly) list = list.filter(n => n.is_pinned);
     // 前端二次过滤 (后端 search 通常只匹配标题; 这里补内容模糊)
@@ -226,6 +242,20 @@ export const store = reactive({
     if (mins < 1) return '< 1 分钟';
     return Math.ceil(mins) + ' 分钟';
   }),
+
+  // ===== Wiki 链接状态 (响应式, 依赖 store.notes) =====
+  linkIndex: computed(() => buildLinkIndex(store.notes)),
+  currentNoteBacklinks: computed(() => {
+    if (!store.editingNote) return [];
+    return findBacklinks(store.editingNote.id, store.notes, store.linkIndex);
+  }),
+  currentNoteOutlinks: computed(() => {
+    if (!store.editingNote) return [];
+    return findOutlinks(store.editingNote.id, store.notes, store.linkIndex);
+  }),
+  graphData: computed(() => buildGraphData(store.notes, store.linkIndex)),
+  hasBacklinks: computed(() => store.currentNoteBacklinks.length > 0),
+  hasOutlinks: computed(() => store.currentNoteOutlinks.length > 0),
 
   // ===== Toast =====
   showToast(message, type = 'success') {
@@ -368,33 +398,56 @@ export const store = reactive({
   openNote(note) {
     store.editingNote = { ...note };
     store.editTitle = note.title || '';
-    store.editContent = note.content || '';
+    store.editLinks = [];
+    let content = note.content || '';
+    const linkMatch = content.match(/<!--\s*qm-links:([^]*?)-->/);
+    if (linkMatch) {
+      try {
+        const parsed = JSON.parse(linkMatch[1].trim());
+        // 兼容旧格式: 纯字符串数组 → 统一转为 { title, annotation }
+        if (Array.isArray(parsed)) {
+          store.editLinks = parsed.map(item =>
+            typeof item === 'string' ? { title: item, annotation: '' } : item
+          );
+        }
+      } catch (e) {
+        // 逗号分隔的旧格式
+        store.editLinks = linkMatch[1].split(',').map(s => ({ title: s.trim(), annotation: '' })).filter(l => l.title);
+      }
+      content = content.replace(/<!--\s*qm-links:[\s\S]*?-->\s*/g, '').trim();
+    } else {
+      store.editLinks = [];
+    }
+    store.editContent = content;
     store.editCategoryIds = note.category_ids ? [...note.category_ids] : [];
-    // 自动检测现有内容是 Markdown 还是 HTML
     store.editMode = detectContentMode(store.editContent);
   },
 
   setEditMode(mode) {
-    if (mode !== 'rich' && mode !== 'markdown') return;
+    if (mode !== 'plain' && mode !== 'markdown') return;
     if (store.editMode === mode) return;
     store.editMode = mode;
   },
 
   closeEditor() {
-    // 取消尚未触发的 auto-save, 避免 race
     store.cancelAutoSave();
-    // 快照当前编辑数据, 避免异步保存时 editingNote 已被置空
+    // 嵌入链接到内容中再保存
+    let saveContent = store.editContent || '';
+    const links = [...store.editLinks];
+    if (links.length > 0) {
+      saveContent = (saveContent.replace(/<!--\s*qm-links:[\s\S]*?-->\s*/g, '').trim())
+        + '\n<!-- qm-links:' + JSON.stringify(links) + ' -->';
+    }
     const snapshot = store.editingNote
-      ? { id: store.editingNote.id, title: store.editTitle, content: store.editContent, catIds: [...store.editCategoryIds] }
+      ? { id: store.editingNote.id, title: store.editTitle, content: saveContent, catIds: [...store.editCategoryIds] }
       : null;
-    // 立即清空编辑器状态, 让 UI 响应迅速
     store.editingNote = null;
     store.editTitle = '';
     store.editContent = '';
     store.editCategoryIds = [];
-    store.editMode = 'rich';
+    store.editLinks = [];
+    store.editMode = 'plain';
     store.editorPreviewVisible = true;
-    // 后台异步保存 (不阻断 UI)
     if (snapshot && snapshot.id) {
       API.updateNote(snapshot.id, {
         title: snapshot.title || '无标题',
@@ -421,10 +474,15 @@ export const store = reactive({
 
   async saveCurrentNote() {
     if (!store.editingNote || !store.editingNote.id) return;
-    const noteId = store.editingNote.id; // 快照 id, 避免 editingNote 后续被置空
+    const noteId = store.editingNote.id;
+    // 构建内容: 去掉旧链接标记, 追加当前链接
+    let content = (store.editContent || '').replace(/<!--\s*qm-links:[\s\S]*?-->\s*/g, '').trim();
+    if (store.editLinks && store.editLinks.length > 0) {
+      content += '\n<!-- qm-links:' + JSON.stringify(store.editLinks) + ' -->';
+    }
     const data = {
       title: store.editTitle || '无标题',
-      content: store.editContent || '',
+      content: content,
       category_ids: store.editCategoryIds
     };
     try {
@@ -474,6 +532,7 @@ export const store = reactive({
       store.editTitle = '';
       store.editContent = '';
       store.editCategoryIds = [];
+      store.editLinks = [];
       store.loadCategories();
       store.showToast('笔记已删除');
     } catch (err) {
@@ -494,6 +553,7 @@ export const store = reactive({
         store.editTitle = '';
         store.editContent = '';
         store.editCategoryIds = [];
+      store.editLinks = [];
       }
       store.notes = store.notes.filter(n => n.id !== noteId);
       await store.loadCategories();
@@ -532,10 +592,11 @@ export const store = reactive({
   // ===== Auto-save =====
   scheduleAutoSave() {
     clearTimeout(autoSaveTimer);
+    // 快照当前笔记 id, 避免异步回调时 editingNote 已切换
+    const noteId = store.editingNote ? store.editingNote.id : null;
     autoSaveTimer = setTimeout(() => {
       autoSaveTimer = null;
-      // 仅在还有正在编辑的笔记时才保存 (避免编辑器已被关闭时 race)
-      if (store.editingNote && store.editingNote.id) {
+      if (noteId && store.editingNote && store.editingNote.id === noteId) {
         store.saveCurrentNote().then(() => store.loadCategories());
       }
     }, 1000);

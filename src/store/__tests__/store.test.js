@@ -204,30 +204,30 @@ describe('store - editor operations', () => {
     expect(store.editTitle).toBe('Test');
     expect(store.editContent).toBe('<p>HTML content</p>');
     expect(store.editCategoryIds).toEqual([1, 2]);
-    expect(store.editMode).toBe('rich');
+    expect(store.editMode).toBe('markdown');
   });
 
-  it('openNote detects markdown mode', () => {
+  it('openNote detects plain mode', () => {
     const note = {
       id: 2,
-      title: 'MD Note',
+      title: 'Plain Note',
       content: '# Title\n\nSome text',
       category_ids: []
     };
     store.openNote(note);
-    expect(store.editMode).toBe('markdown');
+    expect(store.editMode).toBe('plain');
   });
 
   it('setEditMode changes mode', () => {
-    store.editMode = 'rich';
+    store.editMode = 'plain';
     store.setEditMode('markdown');
     expect(store.editMode).toBe('markdown');
   });
 
   it('setEditMode ignores invalid mode', () => {
-    store.editMode = 'rich';
+    store.editMode = 'plain';
     store.setEditMode('invalid');
-    expect(store.editMode).toBe('rich');
+    expect(store.editMode).toBe('plain');
   });
 
   it('openNewNoteDialog opens dialog', () => {
