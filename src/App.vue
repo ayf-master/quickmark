@@ -1,5 +1,6 @@
 <template>
   <div class="flex flex-col h-full">
+    <div class="noise-overlay"></div>
     <!-- 启动鉴权中: 显示 loading, 不直接渲染 LoginView 避免页面闪烁 -->
     <div v-if="!authChecked" class="flex-1 flex items-center justify-center"
       style="background: var(--bg-panel);">
