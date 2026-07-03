@@ -13,7 +13,13 @@ git push
 然后服务器一条命令搞定：
 
 ```bash
-ssh -i "你的密钥路径" ubuntu@118.89.199.84 "cd ~/quickmark && ./deploy.sh"
+ssh -i ~/.ssh/ayf.pem ubuntu@118.89.199.84 "cd ~/quickmark && ./deploy.sh"
+```
+
+如果服务器上有旧文件冲突（如 `diagnose.sh`），先删掉再拉：
+
+```bash
+ssh -i ~/.ssh/ayf.pem ubuntu@118.89.199.84 "cd ~/quickmark && rm -f 冲突文件名 && ./deploy.sh"
 ```
 
 ## deploy.sh 在服务器上做了什么
