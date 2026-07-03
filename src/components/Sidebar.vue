@@ -69,7 +69,7 @@
     </div>
 
     <!-- 分类列表 (树形) -->
-    <nav class="flex-1 panel-scroll px-3 pb-4" aria-label="分类">
+    <nav class="flex-1 panel-scroll px-3 pb-4" aria-label="分类" data-tour="sidebar">
       <div class="flex items-center justify-between px-2 mb-2 mt-3">
         <h2 class="text-xs font-semibold uppercase tracking-wider"
           style="color: var(--text-tertiary);">分类</h2>

@@ -3,7 +3,8 @@
   <section class="flex flex-col h-full"
     style="overflow: hidden; width: 100%;"
     role="region"
-    aria-label="笔记列表">
+    aria-label="笔记列表"
+      data-tour="note-list">
     <!-- Header: 搜索 + 标题 + 收藏过滤 -->
     <header class="px-6 py-4 flex-shrink-0"
       style="border-bottom: 1px solid var(--border-default);">

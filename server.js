@@ -109,6 +109,19 @@ app.use(require('./prisma/auth').attachUser);
 // 阶段 4: 挂载 /api/auth 路由 (login/refresh/logout/me/register)
 //         这 5 个端点不走业务鉴权, 内部自行处理
 app.use('/api/auth', require('./prisma/routes-auth'));
+app.use('/api/feedback', require('./prisma/routes-feedback'));
+
+// 🔒 全局限流: 所有 /api/* 请求 100次/分钟/IP, 防刷接口 / DoS
+//     auth 路由内部已有登录/注册各自的严限流, 不受此影响
+const rateLimit = require('express-rate-limit');
+const apiLimiter = rateLimit({
+  windowMs: 60 * 1000,
+  max: 100,
+  message: { error: '请求过于频繁, 请稍后再试' },
+  standardHeaders: true,
+  legacyHeaders: false
+});
+app.use('/api', apiLimiter);
 
 // 阶段 4: 业务 API 鉴权 (除 /api/auth/*, /api/health, /api/upload, /uploads 外都强制登录 + CSRF)
 //          pool 模式 (USE_PRISMA=0) 不强制鉴权, 保留应急回退

@@ -7,7 +7,8 @@
 
     <!-- 顶部工具栏 -->
     <header class="flex items-center justify-between px-4 sm:px-6 py-3 flex-shrink-0 gap-2 flex-wrap"
-      style="border-bottom: 1px solid var(--border-default); background: var(--bg-panel);">
+      style="border-bottom: 1px solid var(--border-default); background: var(--bg-panel);"
+      data-tour="editor">
 
       <!-- 左侧: 返回 / 模式切换 -->
       <div class="flex items-center gap-3 min-w-0">

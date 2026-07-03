@@ -97,4 +97,17 @@ model User {
   categories Category[]
 
   @@map("users")
+
+// ===== 意见反馈表 =====
+model Feedback {
+  id        Int      @id @default(autoincrement())
+  content   String   @db.Text
+  contact   String?  @db.VarChar(200)
+  userId    Int?     @map("user_id")
+  createdAt DateTime @default(now()) @map("created_at")
+
+  owner User? @relation(fields: [userId], references: [id], onDelete: SetNull)
+
+  @@map("feedback")
+}
 }

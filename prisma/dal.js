@@ -400,6 +400,32 @@ function formatNote(note) {
   };
 }
 
+
+// ===== 意见反馈 =====
+async function createFeedback({ content, contact, userId }) {
+  return prisma.feedback.create({
+    data: { content, contact: contact || null, userId: userId || null }
+  });
+}
+
+async function listFeedback(page = 1, pageSize = 20) {
+  const skip = (page - 1) * pageSize;
+  const [items, total] = await Promise.all([
+    prisma.feedback.findMany({
+      orderBy: { createdAt: 'desc' },
+      skip,
+      take: pageSize,
+      include: { owner: { select: { username: true, displayName: true } } }
+    }),
+    prisma.feedback.count()
+  ]);
+  return { items, total, page, pageSize };
+}
+
+async function deleteFeedback(id) {
+  return prisma.feedback.delete({ where: { id } });
+}
+
 module.exports = {
   // 用户
   findUserByUsername,
@@ -418,5 +444,8 @@ module.exports = {
   listCategories,
   createCategory,
   updateCategory,
-  deleteCategory
+  deleteCategory,
+  createFeedback,
+  listFeedback,
+  deleteFeedback
 };

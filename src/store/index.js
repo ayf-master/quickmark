@@ -13,6 +13,9 @@ import {
   buildGraphData
 } from '@/utils/wiki-link.js';
 
+// 新手引导步骤数 (内容定义在 components/OnboardingTour.vue)
+export const ONBOARDING_TOTAL_STEPS = 6;
+
 // --- private timers ---
 let autoSaveTimer = null;
 let toastTimer = null;
@@ -69,9 +72,9 @@ export const store = reactive({
   categoryForm: { name: '', color: '#5B8DEF', parent_id: null },
   editingCategoryId: null,
 
-  // 新手引导已在 1.0 移除 (改用首次空态轻提示 + 使用指南承接)
-  // 保留 initOnboarding 仅作 v0 迁移: 清除老用户浏览器里的 localStorage 标记
-  onboardingDismissed: false,
+  // 新手引导 (v1.2+ 分步浮层式, 首次登录自动弹出)
+  onboardingVisible: false,
+  onboardingStep: 0,
 
   // ===== Toast =====
   toast: { show: false, message: '', type: 'success' },
@@ -264,13 +267,36 @@ export const store = reactive({
     toastTimer = setTimeout(() => { store.toast.show = false; }, 2500);
   },
 
-  // ===== Onboarding 兼容层 (v0 旧引导, v1 移除) =====
-  // 老用户浏览器里可能还有 quickmark-onboarding-dismissed 标记, 一次性清理
-  // 新代码不再读 onboardingDismissed, 改由 NoteList.vue 自己管理空态提示
-  shouldShowOnboarding: computed(() => false),
-  dismissOnboarding() { /* noop */ },
+  // ===== Onboarding Tour (v1.2+ 分步浮层引导) =====
+  startOnboarding() {
+    store.onboardingStep = 0;
+    store.onboardingVisible = true;
+  },
+  nextOnboardingStep() {
+    if (store.onboardingStep < ONBOARDING_TOTAL_STEPS - 1) {
+      store.onboardingStep++;
+    } else {
+      store.dismissOnboarding();
+    }
+  },
+  prevOnboardingStep() {
+    if (store.onboardingStep > 0) {
+      store.onboardingStep--;
+    }
+  },
+  dismissOnboarding() {
+    store.onboardingVisible = false;
+    try { localStorage.setItem('quickmark-onboarding-done', '1'); } catch (e) {}
+  },
   initOnboarding() {
+    // 老用户 localStorage 清理
     try { localStorage.removeItem('quickmark-onboarding-dismissed'); } catch (e) {}
+    // 首次登录自动弹出
+    try {
+      if (!localStorage.getItem('quickmark-onboarding-done')) {
+        store.startOnboarding();
+      }
+    } catch (e) {}
   },
 
   // ===== User Guide =====

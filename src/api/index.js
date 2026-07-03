@@ -222,6 +222,34 @@ const API = {
       throw new Error(err.error || '排序失败');
     }
     return resp.json();
+  },
+
+
+  // ===== Feedback =====
+  async submitFeedback({ content, contact }) {
+    const resp = await authedFetch('/api/feedback', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ content, contact })
+    });
+    if (!resp.ok) {
+      const err = await resp.json().catch(() => ({ error: '提交失败' }));
+      throw new Error(err.error || '提交失败');
+    }
+    return resp.json();
+  },
+
+  async getFeedback(page) {
+    const q = page ? '?page=' + page : '';
+    const resp = await authedFetch('/api/feedback' + q);
+    if (!resp.ok) throw new Error('获取反馈失败');
+    return resp.json();
+  },
+
+  async deleteFeedback(id) {
+    const resp = await authedFetch('/api/feedback/' + id, { method: 'DELETE' });
+    if (!resp.ok) throw new Error('删除失败');
+    return resp.json();
   }
 };
 

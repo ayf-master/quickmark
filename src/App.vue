@@ -16,7 +16,7 @@
     </div>
     <LoginView v-else-if="!loggedIn" :initialError="initialError" @success="onLoginSuccess" />
     <template v-else>
-      <AppHeader @logout="onLogout" />
+      <AppHeader @logout="onLogout" @openFeedback="feedbackVisible = true" @openFeedbackAdmin="feedbackAdminVisible = true" />
       <div class="app-layout flex-1 min-h-0">
         <Sidebar />
 
@@ -41,7 +41,10 @@
       <NewNoteDialog />
       <ShortcutHelp />
       <UserGuide />
+      <OnboardingTour />
       <KnowledgeGraph />
+            <FeedbackDialog :visible="feedbackVisible" @close="feedbackVisible = false" />
+      <FeedbackAdmin :visible="feedbackAdminVisible" @close="feedbackAdminVisible = false" />
       <Toast />
     </template>
   </div>
@@ -58,14 +61,20 @@ import CategoryDialog from '@/components/CategoryDialog.vue';
 import NewNoteDialog from '@/components/NewNoteDialog.vue';
 import ShortcutHelp from '@/components/ShortcutHelp.vue';
 import UserGuide from '@/components/UserGuide.vue';
+import OnboardingTour from '@/components/OnboardingTour.vue';
 import Toast from '@/components/Toast.vue';
 import LoginView from '@/components/LoginView.vue';
+import FeedbackDialog from '@/components/FeedbackDialog.vue';
+import FeedbackAdmin from '@/components/FeedbackAdmin.vue';
 import KnowledgeGraph from '@/components/KnowledgeGraph.vue';
 import API from '@/api/index.js';
 
 const authChecked = ref(false);
 const loggedIn = ref(false);
 const initialError = ref('');
+const feedbackVisible = ref(false);
+const feedbackAdminVisible = ref(false);
+
 
 onMounted(async () => {
   const user = await API.me();
@@ -87,6 +96,7 @@ async function onLoginSuccess(user) {
     store.currentUser = await API.me();
   }
   await store.loadAll();
+  store.initOnboarding();
 }
 
 async function onLogout() {

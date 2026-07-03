@@ -70,7 +70,8 @@
           class="btn btn-ghost flex items-center gap-2 px-2 py-1.5"
           @click="menuOpen = !menuOpen"
           aria-label="用户菜单"
-          :aria-expanded="menuOpen">
+          :aria-expanded="menuOpen"
+          data-tour="user-menu">
           <!-- 头像圆点 (用用户名首字符) -->
           <span class="w-6 h-6 rounded-full flex items-center justify-center text-xs font-semibold flex-shrink-0"
             :style="`background: var(--color-accent); color: white;`">
@@ -136,6 +137,35 @@
             <span>快捷键</span>
           </button>
 
+          <!-- 意见反馈 (所有用户) -->
+          <button
+            class="w-full text-left px-4 py-2 text-sm flex items-center gap-2 transition-colors"
+            style="color: var(--text-primary);"
+            @click="onOpenFeedback"
+            @mouseenter="(e) => e.currentTarget.style.background = 'var(--bg-panel)'"
+            @mouseleave="(e) => e.currentTarget.style.background = 'transparent'">
+            <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                d="M7 8h10M7 12h4m1 8l-4-4H5a2 2 0 01-2-2V6a2 2 0 012-2h14a2 2 0 012 2v8a2 2 0 01-2 2h-3l-4 4z"/>
+            </svg>
+            <span>意见反馈</span>
+          </button>
+
+          <!-- 反馈管理 (仅 admin) -->
+          <button v-if="isAdmin"
+            class="w-full text-left px-4 py-2 text-sm flex items-center gap-2 transition-colors"
+            style="color: var(--text-primary);"
+            @click="onOpenFeedbackAdmin"
+            @mouseenter="(e) => e.currentTarget.style.background = 'var(--bg-panel)'"
+            @mouseleave="(e) => e.currentTarget.style.background = 'transparent'">
+            <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                d="M9 17v-2m3 2v-4m3 4v-6m2 10H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"/>
+            </svg>
+            <span>反馈管理</span>
+          </button>
+
+
           <div class="border-t my-1" style="border-color: var(--border-default);"></div>
 
           <!-- 登出 -->
@@ -162,7 +192,18 @@ import { ref, computed, onMounted, onUnmounted } from 'vue';
 import { store } from '@/store';
 import ThemeToggle from '@/components/ThemeToggle.vue';
 
-const emit = defineEmits(['logout']);
+const isAdmin = computed(() => store.currentUser?.role === 'admin');
+
+function onOpenFeedback() {
+  menuOpen.value = false;
+  emit('openFeedback');
+}
+function onOpenFeedbackAdmin() {
+  menuOpen.value = false;
+  emit('openFeedbackAdmin');
+}
+
+const emit = defineEmits(['logout', 'openFeedback', 'openFeedbackAdmin']);
 const menuOpen = ref(false);
 const menuRef = ref(null);
 
