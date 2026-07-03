@@ -95,6 +95,7 @@ model User {
 
   notes      Note[]
   categories Category[]
+  feedbacks  Feedback[]
 
   @@map("users")
 }
