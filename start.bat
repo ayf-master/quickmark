@@ -15,7 +15,7 @@ set DB_PASS=ayf147852369
 if %errorlevel% equ 0 goto mysql_ready
 
 :: Start MySQL in a separate window
-echo [1/2] Starting MySQL (minimized)...
+echo [1/3] Starting MySQL (minimized)...
 start /MIN "" "%MYSQL_PATH%\mysqld" --console
 
 :: Wait up to 20 seconds
@@ -35,9 +35,16 @@ goto wait_mysql
 :mysql_ready
 echo MySQL OK.
 
-:: Start QuickMark frontend (Vite dev server)
-echo [2/2] Starting QuickMark...
+:: Start QuickMark backend (Express API on port 3000)
+echo [2/3] Starting QuickMark backend...
 cd /d "d:\vibeCoding\quickmark"
+start "QuickMark-API" cmd /c "node server.js"
+
+:: Wait 3 seconds for backend to init
+timeout /t 3 /nobreak >nul
+
+:: Start QuickMark frontend (Vite dev server on port 5173)
+echo [3/3] Starting QuickMark frontend...
 start "QuickMark" cmd /c "npm run dev"
 
 echo.
@@ -47,6 +54,6 @@ echo   Frontend: http://localhost:5173
 echo   Backend:  http://localhost:3000
 echo ==============================
 echo.
-echo Close this window to stop the frontend server.
+echo Close this window to stop both servers.
 echo MySQL runs in its own window (minimized).
 pause

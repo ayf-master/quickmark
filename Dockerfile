@@ -1,22 +1,38 @@
 # ===== Stage 1: Build =====
-FROM node:20-alpine AS builder
+FROM node:20-bookworm-slim AS builder
 
 WORKDIR /app
 
-COPY package.json ./
+RUN npm config set registry https://registry.npmmirror.com
+
+# 先复制 prisma schema 再装依赖，确保 postinstall 钩子能执行 prisma generate
+COPY package.json package-lock.json ./
+COPY prisma ./prisma
 RUN npm install
 
-COPY . .
-RUN npx prisma generate
+# 复制其余项目文件
+COPY src ./src
+COPY public ./public
+COPY index.html ./
+COPY vite.config.js ./
+COPY css ./css
+COPY server.js ./
+COPY db ./db
+
+# 构建前端
 RUN npm run build
 
 
 # ===== Stage 2: Run =====
-FROM node:20-alpine
+FROM node:20-bookworm-slim
+
+RUN apt-get update -y && apt-get install -y openssl ca-certificates && rm -rf /var/lib/apt/lists/*
 
 WORKDIR /app
 
-COPY package.json ./
+RUN npm config set registry https://registry.npmmirror.com
+
+COPY package.json package-lock.json ./
 RUN npm install --production --ignore-scripts
 
 # 复制构建产物

@@ -1,0 +1,11 @@
+FROM ubuntu:22.04 AS builder
+RUN apt-get update && apt-get install -y git make gcc && rm -rf /var/lib/apt/lists/*
+RUN git clone https://github.com/twindb/undrop-for-innodb.git /opt/undrop
+WORKDIR /opt/undrop
+RUN make
+
+FROM ubuntu:22.04
+COPY --from=builder /opt/undrop /opt/undrop
+RUN apt-get update && apt-get install -y python3 && rm -rf /var/lib/apt/lists/*
+WORKDIR /data
+ENTRYPOINT ["/opt/undrop/stream_parser"]

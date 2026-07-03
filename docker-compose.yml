@@ -43,6 +43,7 @@ services:
         condition: service_healthy
     environment:
       PORT: 3000
+      USE_PRISMA: "1"
       DB_HOST: db
       DB_PORT: 3306
       DB_USER: root

@@ -21,6 +21,16 @@ const express = require('express');
 const router = express.Router();
 const auth = require('./auth');
 const { Prisma } = require('@prisma/client');
+const rateLimit = require('express-rate-limit');
+
+// 🔒 注册限流: 5 次/15分钟/IP, 防脚本批量注册
+const registerLimiter = rateLimit({
+  windowMs: 15 * 60 * 1000,
+  max: 5,
+  message: { error: '注册尝试过多, 请 15 分钟后再试' },
+  standardHeaders: true,
+  legacyHeaders: false
+});
 
 // 工具: 从 server.js 注入 prisma 实例 (避免路由文件直接 require prismaModule)
 function getPrisma(req) {
@@ -148,7 +158,7 @@ router.get('/me', (req, res) => {
 // 开发期开放, ALLOW_REGISTER=1 启用
 // 生产环境建议关掉, 改用 admin 邀请码
 
-router.post('/register', async (req, res) => {
+router.post('/register', registerLimiter, async (req, res) => {
   if (process.env.ALLOW_REGISTER !== '1') {
     return res.status(403).json({ error: '注册功能已关闭' });
   }
