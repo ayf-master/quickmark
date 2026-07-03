@@ -18,7 +18,7 @@
 
             <input v-model="contact" type="text"
               class="input w-full mt-3 text-sm"
-              placeholder="联系方式 (选填, 邮箱或 GitHub)" />
+              placeholder="联系方式（选填）" />
 
             <p v-if="error" class="text-xs mt-2" style="color: var(--color-danger);">{{ error }}</p>
           </div>
