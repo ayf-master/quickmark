@@ -97,6 +97,7 @@ model User {
   categories Category[]
 
   @@map("users")
+}
 
 // ===== 意见反馈表 =====
 model Feedback {
@@ -109,5 +110,4 @@ model Feedback {
   owner User? @relation(fields: [userId], references: [id], onDelete: SetNull)
 
   @@map("feedback")
-}
 }
