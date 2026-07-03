@@ -595,8 +595,9 @@ function catStyle(cat) {
 let historyUndo = [];
 let historyRedo = [];
 let historySkipNext = false;
-let historyTimer = null;
 let historyReady = false;
+let historyLastTime = 0;
+let historyMergeMs = 500; // 连续输入合并窗口 (ms)
 
 // 切换笔记时清空历史栈
 watch(() => store.editingNote?.id, () => {
@@ -606,16 +607,21 @@ watch(() => store.editingNote?.id, () => {
   nextTick(() => { historyReady = true; });
 });
 
-// 监听内容变化, 自动入栈 (带防抖合并连续输入)
+// 监听内容变化, 即时入栈 (合并窗口内的连续变化合并为一条)
 watch(() => store.editContent, (newVal, oldVal) => {
   if (!historyReady || oldVal === undefined) return;
   if (historySkipNext) { historySkipNext = false; return; }
-  clearTimeout(historyTimer);
-  historyTimer = setTimeout(() => {
+  const now = Date.now();
+  const lastIdx = historyUndo.length - 1;
+  // 距离上次变化还在合并窗口内 → 替换最后一条 (合并输入)
+  if (lastIdx >= 0 && (now - historyLastTime) < historyMergeMs) {
+    historyUndo[lastIdx] = oldVal;
+  } else {
     historyUndo.push(oldVal);
-    historyRedo.length = 0;
     if (historyUndo.length > 100) historyUndo.shift();
-  }, 400);
+  }
+  historyLastTime = now;
+  historyRedo.length = 0; // 新变化清空重做栈
 });
 nextTick(() => { historyReady = true; });
 
