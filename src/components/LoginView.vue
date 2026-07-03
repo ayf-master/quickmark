@@ -104,7 +104,7 @@
 
     <!-- 底部联系信息 -->
     <div class="absolute bottom-0 left-0 right-0 text-center py-3">
-      <span class="text-xs" style="color: #999;">联系作者: 3351247805@qq.com · ayf-master</span>
+      <span class="text-xs" style="color: #999;">联系作者: 邮箱 3351247805@qq.com · GitHub ayf-master</span>
     </div>
   </div>
 </template>
