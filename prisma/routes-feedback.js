@@ -3,6 +3,8 @@ const router = express.Router();
 const dal = require('./dal');
 const { requireAuth } = require('./auth');
 
+function getPrisma(req) { return req.app.locals.prisma; }
+
 // POST /api/feedback - 提交反馈 (任意用户)
 router.post('/', async (req, res) => {
   try {
@@ -14,7 +16,7 @@ router.post('/', async (req, res) => {
       content: content.trim(),
       contact: contact?.trim() || null,
       userId: req.user?.id
-    });
+    }, getPrisma(req));
     res.json(feedback);
   } catch (err) {
     console.error('createFeedback error:', err);
@@ -27,7 +29,7 @@ router.get('/', requireAuth, async (req, res) => {
   try {
     if (req.user?.role !== 'admin') return res.status(403).json({ error: '无权限' });
     const page = parseInt(req.query.page) || 1;
-    const result = await dal.listFeedback(page);
+    const result = await dal.listFeedback(page, 20, getPrisma(req));
     res.json(result);
   } catch (err) {
     console.error('listFeedback error:', err);
@@ -39,7 +41,7 @@ router.get('/', requireAuth, async (req, res) => {
 router.delete('/:id', requireAuth, async (req, res) => {
   try {
     if (req.user?.role !== 'admin') return res.status(403).json({ error: '无权限' });
-    await dal.deleteFeedback(parseInt(req.params.id));
+    await dal.deleteFeedback(parseInt(req.params.id), getPrisma(req));
     res.json({ ok: true });
   } catch (err) {
     console.error('deleteFeedback error:', err);

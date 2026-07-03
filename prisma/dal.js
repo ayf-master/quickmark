@@ -402,13 +402,13 @@ function formatNote(note) {
 
 
 // ===== 意见反馈 =====
-async function createFeedback({ content, contact, userId }) {
+async function createFeedback({ content, contact, userId }, prisma) {
   return prisma.feedback.create({
     data: { content, contact: contact || null, userId: userId || null }
   });
 }
 
-async function listFeedback(page = 1, pageSize = 20) {
+async function listFeedback(page = 1, pageSize = 20, prisma) {
   const skip = (page - 1) * pageSize;
   const [items, total] = await Promise.all([
     prisma.feedback.findMany({
@@ -422,7 +422,7 @@ async function listFeedback(page = 1, pageSize = 20) {
   return { items, total, page, pageSize };
 }
 
-async function deleteFeedback(id) {
+async function deleteFeedback(id, prisma) {
   return prisma.feedback.delete({ where: { id } });
 }
 
