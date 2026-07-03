@@ -7,11 +7,7 @@
     <div class="login-card">
       <!-- Logo -->
       <div class="logo-area">
-        <div class="logo-icon">
-          <svg viewBox="0 0 40 40" fill="none" xmlns="http://www.w3.org/2000/svg">
-            <path d="M22 4L10 22h10l-2 16L30 18H20l2-14Z" fill="currentColor"/>
-          </svg>
-        </div>
+        <div class="logo-icon">⚡</div>
         <h1>QuickMark</h1>
         <p>轻量级笔记应用</p>
       </div>
@@ -246,10 +242,8 @@ async function onSubmit() {
   border-radius: 16px;
   color: var(--color-primary);
   background: var(--color-primary-subtle);
-}
-.logo-icon svg {
-  width: 26px;
-  height: 26px;
+  font-size: 26px;
+  line-height: 1;
 }
 .logo-area h1 {
   font-size: 1.375rem;
