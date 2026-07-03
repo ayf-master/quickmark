@@ -68,17 +68,32 @@
       </div>
     </header>
 
-    <!-- List / Empty -->
+    <!-- List / Empty / Skeleton -->
     <div class="flex-1 panel-scroll px-4 py-4">
-      <template v-if="Array.isArray(store.filteredNotes) && store.filteredNotes.length > 0">
-        <div v-for="note in store.filteredNotes"
+      <!-- 骨架屏 (加载中) -->
+      <template v-if="store.notesLoading">
+        <div v-for="i in 5" :key="'sk' + i"
+          class="p-4 mb-[10px] rounded-lg"
+          style="background: var(--bg-panel);">
+          <div class="skeleton h-5 w-3/4 mb-3"></div>
+          <div class="skeleton h-4 w-full mb-2"></div>
+          <div class="skeleton h-4 w-2/3 mb-3"></div>
+          <div class="flex items-center gap-2">
+            <div class="skeleton h-3 w-16"></div>
+            <div class="skeleton h-5 w-12 rounded-full"></div>
+          </div>
+        </div>
+      </template>
+      <template v-else-if="Array.isArray(store.filteredNotes) && store.filteredNotes.length > 0">
+        <div v-for="(note, idx) in store.filteredNotes"
           :key="note.id"
           draggable="true"
           @dragstart="onNoteDragStart($event, note.id)"
           @dragover.prevent="onNoteDragOver($event, note.id)"
           @drop.prevent="onNoteDrop($event, note.id)"
           @dragend="onNoteDragEnd"
-          :class="{ 'note-dragging': dragNoteId === note.id, 'note-drop-here': dragOverNoteId === note.id }">
+          :class="['fade-in-up', { 'note-dragging': dragNoteId === note.id, 'note-drop-here': dragOverNoteId === note.id }]"
+          :style="{ animationDelay: idx * 0.04 + 's' }">
           <NoteCard
             :note="note"
             :is-selected="store.editingNote && store.editingNote.id === note.id"

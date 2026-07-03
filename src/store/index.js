@@ -37,6 +37,7 @@ export const store = reactive({
 
   // ===== Data =====
   notes: [],
+  notesLoading: false,
   categories: [],
   searchQuery: '',     // 笔记搜索 (NoteList 顶部那个)
   categorySearchQuery: '', // 分类搜索 (Sidebar 顶部那个, 模糊过滤分类树)
@@ -69,7 +70,7 @@ export const store = reactive({
   showNewCategoryDialog: false,
   showEditCategoryDialog: false,
   newNoteDialogOpen: false, // 新建笔记前先选分类 (v1.1: 替代直接 createNote)
-  categoryForm: { name: '', color: '#5B8DEF', parent_id: null },
+  categoryForm: { name: '', color: '#5B6EF5', parent_id: null },
   editingCategoryId: null,
 
   // 新手引导 (v1.2+ 分步浮层式, 首次登录自动弹出)
@@ -334,6 +335,7 @@ export const store = reactive({
 
   // ===== Data loading =====
   async loadNotes() {
+    store.notesLoading = true;
     try {
       store.showPinnedOnly = false;
       const params = {};
@@ -344,6 +346,8 @@ export const store = reactive({
     } catch (err) {
       console.error('loadNotes error:', err);
       store.notes = [];
+    } finally {
+      store.notesLoading = false;
     }
   },
 

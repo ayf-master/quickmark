@@ -1,5 +1,5 @@
 <template>
-  <section class="flex flex-col h-full"
+  <section class="flex flex-col h-full fade-in-up"
     :class="{ 'editor-fullscreen': store.isCompact }"
     :style="panelStyle"
     role="region"

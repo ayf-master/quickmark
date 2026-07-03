@@ -132,10 +132,9 @@ input[type="color"]::-webkit-color-swatch {
 /* ===== Cards ===== */
 .card {
   background: var(--bg-panel);
-  border: 1px solid var(--border-default);
   border-radius: var(--radius-lg);
-  transition: border-color var(--transition-base),
-              background-color var(--transition-base),
+  box-shadow: var(--shadow-sm);
+  transition: background-color var(--transition-base),
               box-shadow var(--transition-base),
               transform var(--transition-fast);
 }
@@ -193,6 +192,36 @@ input[type="color"]::-webkit-color-swatch {
   -webkit-line-clamp: 3;
   -webkit-box-orient: vertical;
   overflow: hidden;
+}
+
+/* ===== Text balancing ===== */
+.text-balance { text-wrap: balance; }
+.text-pretty { text-wrap: pretty; }
+
+/* ===== Skeleton shimmer ===== */
+@keyframes shimmer {
+  0% { background-position: -400px 0; }
+  100% { background-position: 400px 0; }
+}
+.skeleton {
+  background: linear-gradient(
+    90deg,
+    var(--bg-hover) 25%,
+    var(--bg-active) 37%,
+    var(--bg-hover) 63%
+  );
+  background-size: 800px 100%;
+  animation: shimmer 1.4s ease-in-out infinite;
+  border-radius: var(--radius-sm);
+}
+
+/* ===== Fade-in on mount (for staggered entry) ===== */
+@keyframes fadeInUp {
+  from { opacity: 0; transform: translateY(8px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+.fade-in-up {
+  animation: fadeInUp 0.3s ease both;
 }
 
 /* ===== Drawer (mobile sidebar) ===== */

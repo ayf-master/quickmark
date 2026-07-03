@@ -69,11 +69,9 @@ function confirmDelete(e) {
 <style scoped>
 .card.is-selected {
   background: var(--bg-active) !important;
-  border-color: var(--color-primary-border) !important;
-  box-shadow: 0 0 0 1px var(--color-primary) inset, var(--shadow-sm);
+  box-shadow: 0 0 0 2px var(--color-primary-border), var(--shadow-sm) !important;
 }
 .card:hover {
-  border-color: var(--color-primary-border);
   box-shadow: var(--shadow-md);
   transform: translateY(-1px);
 }

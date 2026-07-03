@@ -2,11 +2,11 @@
 
 :root {
   /* === Fonts === */
-  --font-sans: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto,
-    "Helvetica Neue", Arial, "Noto Sans SC", "PingFang SC",
+  --font-sans: "Geist", -apple-system, BlinkMacSystemFont, "Segoe UI",
+    Roboto, "Helvetica Neue", Arial, "Noto Sans SC", "PingFang SC",
     "Microsoft YaHei", sans-serif;
-  --font-mono: "SF Mono", "Fira Code", "Cascadia Code", Consolas,
-    "Liberation Mono", Menlo, monospace;
+  --font-mono: "Geist Mono", "SF Mono", "Fira Code", "Cascadia Code",
+    Consolas, "Liberation Mono", Menlo, monospace;
 
   /* === Font sizes === */
   --text-xs: 0.75rem;   --leading-xs: 1rem;
@@ -51,27 +51,27 @@
 /* ===== Light Theme (default) ===== */
 :root,
 [data-theme="light"] {
-  --color-primary: #5B8DEF;
-  --color-primary-hover: #4A7DE0;
-  --color-primary-subtle: #EEF3FE;
-  --color-primary-border: #B9CEFB;
+  --color-primary: #5B6EF5;
+  --color-primary-hover: #4A5CE0;
+  --color-primary-subtle: #EEF1FE;
+  --color-primary-border: #C5CCFB;
 
-  --color-accent: #D97706;
-  --color-accent-hover: #B45309;
-  --color-accent-subtle: #FEF3C7;
-  --color-accent-border: #FCD34D;
+  --color-accent: #C58A2D;
+  --color-accent-hover: #A67320;
+  --color-accent-subtle: #FEF7E8;
+  --color-accent-border: #E8CF8A;
 
   --color-success: #059669;
   --color-success-subtle: #D1FAE5;
   --color-danger: #DC2626;
   --color-danger-subtle: #FEE2E2;
 
-  --bg-root: #F4F6FA;
+  --bg-root: #F1F4FA;
   --bg-panel: #FFFFFF;
   --bg-elevated: #FFFFFF;
-  --bg-hover: #F3F4F6;
-  --bg-active: #EEF3FE;
-  --bg-input: #F9FAFB;
+  --bg-hover: #F3F4F8;
+  --bg-active: #EEF1FE;
+  --bg-input: #F8F9FC;
   --bg-overlay: rgba(15, 23, 42, 0.45);
 
   --text-primary: #0F172A;
@@ -82,25 +82,25 @@
 
   --border-default: #E5E7EB;
   --border-light: #F1F5F9;
-  --border-focus: #5B8DEF;
+  --border-focus: #5B6EF5;
 
-  --shadow-sm: 0 1px 2px rgba(15, 23, 42, 0.04);
-  --shadow-md: 0 4px 6px -1px rgba(15, 23, 42, 0.06), 0 2px 4px -2px rgba(15, 23, 42, 0.04);
-  --shadow-lg: 0 10px 15px -3px rgba(15, 23, 42, 0.08), 0 4px 6px -4px rgba(15, 23, 42, 0.04);
-  --shadow-xl: 0 20px 25px -5px rgba(15, 23, 42, 0.10), 0 8px 10px -6px rgba(15, 23, 42, 0.05);
+  --shadow-sm: 0 1px 3px rgba(91, 110, 245, 0.06);
+  --shadow-md: 0 4px 8px -1px rgba(91, 110, 245, 0.08), 0 2px 4px -2px rgba(91, 110, 245, 0.04);
+  --shadow-lg: 0 10px 16px -3px rgba(91, 110, 245, 0.10), 0 4px 6px -4px rgba(91, 110, 245, 0.05);
+  --shadow-xl: 0 20px 26px -5px rgba(91, 110, 245, 0.12), 0 8px 10px -6px rgba(91, 110, 245, 0.06);
 }
 
 /* ===== Dark Theme ===== */
 [data-theme="dark"] {
-  --color-primary: #7AA2F7;
-  --color-primary-hover: #8DB4FF;
-  --color-primary-subtle: #1E2A4A;
-  --color-primary-border: #2E4373;
+  --color-primary: #7C8CF8;
+  --color-primary-hover: #8E9CFF;
+  --color-primary-subtle: #1E264A;
+  --color-primary-border: #2E3873;
 
-  --color-accent: #FBBF24;
-  --color-accent-hover: #FCD34D;
-  --color-accent-subtle: #422006;
-  --color-accent-border: #78350F;
+  --color-accent: #D4A043;
+  --color-accent-hover: #E0B054;
+  --color-accent-subtle: #3A2E10;
+  --color-accent-border: #6B5220;
 
   --color-success: #34D399;
   --color-success-subtle: #064E3B;
@@ -111,7 +111,7 @@
   --bg-panel: #181B24;
   --bg-elevated: #232733;
   --bg-hover: #252936;
-  --bg-active: #1E2A4A;
+  --bg-active: #1E264A;
   --bg-input: #232733;
   --bg-overlay: rgba(0, 0, 0, 0.6);
 
@@ -123,10 +123,10 @@
 
   --border-default: #2D3148;
   --border-light: #232733;
-  --border-focus: #7AA2F7;
+  --border-focus: #7C8CF8;
 
-  --shadow-sm: 0 1px 2px rgba(0, 0, 0, 0.3);
-  --shadow-md: 0 4px 6px -1px rgba(0, 0, 0, 0.4), 0 2px 4px -2px rgba(0, 0, 0, 0.3);
-  --shadow-lg: 0 10px 15px -3px rgba(0, 0, 0, 0.5), 0 4px 6px -4px rgba(0, 0, 0, 0.3);
-  --shadow-xl: 0 20px 25px -5px rgba(0, 0, 0, 0.6), 0 8px 10px -6px rgba(0, 0, 0, 0.3);
+  --shadow-sm: 0 1px 3px rgba(124, 140, 248, 0.08);
+  --shadow-md: 0 4px 8px -1px rgba(124, 140, 248, 0.10), 0 2px 4px -2px rgba(0, 0, 0, 0.3);
+  --shadow-lg: 0 10px 16px -3px rgba(124, 140, 248, 0.12), 0 4px 6px -4px rgba(0, 0, 0, 0.3);
+  --shadow-xl: 0 20px 26px -5px rgba(124, 140, 248, 0.14), 0 8px 10px -6px rgba(0, 0, 0, 0.3);
 }
