@@ -597,7 +597,6 @@ function catStyle(cat) {
 // 通过 @input 事件直接记录, 比 Vue watch 更可靠 (无响应式时序问题)
 let historyUndo = [];
 let historyRedo = [];
-let historySkipNext = false;
 let historyReady = false;
 let historyLastTime = 0;
 let historyMergeMs = 500; // 连续输入合并窗口 (ms)
@@ -623,7 +622,6 @@ nextTick(() => {
 // @input 事件: 直接在 DOM 事件中记录历史, 不依赖 Vue watch
 function onEditorInput(e) {
   if (!historyReady) return;
-  if (historySkipNext) { historySkipNext = false; return; }
   const newVal = e.target.value;
   if (newVal === historyPrevContent) return; // 无实际变化
   const now = Date.now();
@@ -646,7 +644,6 @@ function undo() {
   const current = store.editContent;
   const prev = historyUndo.pop();
   historyRedo.push(current);
-  historySkipNext = true;
   historyPrevContent = prev;
   store.editContent = prev;
   ta.focus();
@@ -657,7 +654,6 @@ function redo() {
   const current = store.editContent;
   const next = historyRedo.pop();
   historyUndo.push(current);
-  historySkipNext = true;
   historyPrevContent = next;
   store.editContent = next;
   ta.focus();
