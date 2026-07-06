@@ -317,6 +317,7 @@
             v-model="store.editContent"
             ref="contentInput"
             @keydown="handleEditorKeydown"
+            @input="onEditorInput"
             @paste="handlePaste"
             :placeholder="store.editorImageUploading ? '图片上传中...' : '开始用 Markdown 记录...'"
             class="md-editor"
@@ -337,6 +338,7 @@
             v-model="store.editContent"
             ref="plainInput"
             @keydown="handleEditorKeydown"
+            @input="onEditorInput"
             @paste="handlePlainPaste"
             :placeholder="store.editorImageUploading ? '图片上传中...' : '开始记录...'"
             class="plain-editor"
@@ -592,38 +594,51 @@ function catStyle(cat) {
 }
 
 // ===== 撤销 / 重做 (历史栈) =====
+// 通过 @input 事件直接记录, 比 Vue watch 更可靠 (无响应式时序问题)
 let historyUndo = [];
 let historyRedo = [];
 let historySkipNext = false;
 let historyReady = false;
 let historyLastTime = 0;
 let historyMergeMs = 500; // 连续输入合并窗口 (ms)
+let historyPrevContent = ""; // 跟踪上次记录的内容快照
 
-// 切换笔记时清空历史栈
+// 切换笔记时清空历史栈 + 同步初始内容
 watch(() => store.editingNote?.id, () => {
   historyUndo = [];
   historyRedo = [];
   historyReady = false;
-  nextTick(() => { historyReady = true; });
+  nextTick(() => {
+    const ta = getEditorEl();
+    if (ta) historyPrevContent = ta.value;
+    historyReady = true;
+  });
+});
+nextTick(() => {
+  const ta = getEditorEl();
+  if (ta) historyPrevContent = ta.value;
+  historyReady = true;
 });
 
-// 监听内容变化, 即时入栈 (合并窗口内的连续变化合并为一条)
-watch(() => store.editContent, (newVal, oldVal) => {
-  if (!historyReady || oldVal === undefined) return;
+// @input 事件: 直接在 DOM 事件中记录历史, 不依赖 Vue watch
+function onEditorInput(e) {
+  if (!historyReady) return;
   if (historySkipNext) { historySkipNext = false; return; }
+  const newVal = e.target.value;
+  if (newVal === historyPrevContent) return; // 无实际变化
   const now = Date.now();
   const lastIdx = historyUndo.length - 1;
-  // 距离上次变化还在合并窗口内 → 替换最后一条 (合并输入)
   if (lastIdx >= 0 && (now - historyLastTime) < historyMergeMs) {
-    historyUndo[lastIdx] = oldVal;
+    // 合并窗口内: 替换最后一条, 实现"连续输入一次撤销"
+    historyUndo[lastIdx] = historyPrevContent;
   } else {
-    historyUndo.push(oldVal);
+    historyUndo.push(historyPrevContent);
     if (historyUndo.length > 100) historyUndo.shift();
   }
   historyLastTime = now;
-  historyRedo.length = 0; // 新变化清空重做栈
-});
-nextTick(() => { historyReady = true; });
+  historyRedo.length = 0;
+  historyPrevContent = newVal;
+}
 
 function undo() {
   const ta = getEditorEl();
@@ -632,6 +647,7 @@ function undo() {
   const prev = historyUndo.pop();
   historyRedo.push(current);
   historySkipNext = true;
+  historyPrevContent = prev;
   store.editContent = prev;
   ta.focus();
 }
@@ -642,6 +658,7 @@ function redo() {
   const next = historyRedo.pop();
   historyUndo.push(current);
   historySkipNext = true;
+  historyPrevContent = next;
   store.editContent = next;
   ta.focus();
 }
