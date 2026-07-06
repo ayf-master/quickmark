@@ -625,9 +625,10 @@ function onEditorInput(e) {
   const newVal = e.target.value;
   if (newVal === historyPrevContent) return; // 无实际变化
   const now = Date.now();
+  const isGrowing = newVal.length > historyPrevContent.length;
   const lastIdx = historyUndo.length - 1;
-  if (lastIdx >= 0 && (now - historyLastTime) < historyMergeMs) {
-    // 合并窗口内: 替换最后一条, 实现"连续输入一次撤销"
+  if (lastIdx >= 0 && (now - historyLastTime) < historyMergeMs && isGrowing) {
+    // 合并窗口内 + 内容增长(打字): 替换最后一条, 实现"连续输入一次撤销"
     historyUndo[lastIdx] = historyPrevContent;
   } else {
     historyUndo.push(historyPrevContent);
