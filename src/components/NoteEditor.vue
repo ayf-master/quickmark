@@ -656,11 +656,16 @@ function undo() {
   // 兼容旧版纯字符串条目
   const prev = typeof raw === 'string' ? raw : raw.content;
   const cursor = typeof raw === 'string' ? prev.length : Math.min(raw.cursor, prev.length);
+  // 删除(恢复后变长) → 光标在被删文字之后; 打字(恢复后变短) → 光标在插入起始处
+  const changeSize = prev.length - current.length;
+  const targetCursor = changeSize > 0
+    ? Math.min(cursor + changeSize, prev.length)
+    : cursor;
   historyRedo.push({ content: current, cursor: ta.selectionStart });
   historyPrevContent = prev;
   store.editContent = prev;
   nextTick(() => {
-    ta.setSelectionRange(cursor, cursor);
+    ta.setSelectionRange(targetCursor, targetCursor);
     ta.focus();
   });
 }
@@ -671,11 +676,15 @@ function redo() {
   const raw = historyRedo.pop();
   const next = typeof raw === 'string' ? raw : raw.content;
   const cursor = typeof raw === 'string' ? next.length : Math.min(raw.cursor, next.length);
+  const changeSize = next.length - current.length;
+  const targetCursor = changeSize > 0
+    ? Math.min(cursor + changeSize, next.length)
+    : cursor;
   historyUndo.push({ content: current, cursor: ta.selectionStart });
   historyPrevContent = next;
   store.editContent = next;
   nextTick(() => {
-    ta.setSelectionRange(cursor, cursor);
+    ta.setSelectionRange(targetCursor, targetCursor);
     ta.focus();
   });
 }
