@@ -647,7 +647,11 @@ function undo() {
   historyRedo.push(current);
   historyPrevContent = prev;
   store.editContent = prev;
-  ta.focus();
+  nextTick(() => {
+    const pos = prev.length;
+    ta.setSelectionRange(pos, pos);
+    ta.focus();
+  });
 }
 function redo() {
   const ta = getEditorEl();
@@ -657,7 +661,11 @@ function redo() {
   historyUndo.push(current);
   historyPrevContent = next;
   store.editContent = next;
-  ta.focus();
+  nextTick(() => {
+    const pos = next.length;
+    ta.setSelectionRange(pos, pos);
+    ta.focus();
+  });
 }
 
 // ===== 模式切换 =====
