@@ -593,14 +593,14 @@ function catStyle(cat) {
   };
 }
 
-// ===== 撤销 / 重做 (历史栈) =====
-// 通过 @input 事件直接记录, 比 Vue watch 更可靠 (无响应式时序问题)
+// ===== 撤销 / 重做 (历史栈, 记录光标位置) =====
+// 历史条目: { content: string, cursor: number } — 记录修改前的内容快照和光标位置
 let historyUndo = [];
 let historyRedo = [];
 let historyReady = false;
 let historyLastTime = 0;
 let historyMergeMs = 500; // 连续输入合并窗口 (ms)
-let historyPrevContent = ""; // 跟踪上次记录的内容快照
+let historyPrevContent = "";
 
 // 切换笔记时清空历史栈 + 同步初始内容
 watch(() => store.editingNote?.id, () => {
@@ -619,19 +619,28 @@ nextTick(() => {
   historyReady = true;
 });
 
-// @input 事件: 直接在 DOM 事件中记录历史, 不依赖 Vue watch
+// @input 事件: 记录历史 + 当前光标位置
 function onEditorInput(e) {
   if (!historyReady) return;
   const newVal = e.target.value;
-  if (newVal === historyPrevContent) return; // 无实际变化
-  const now = Date.now();
+  if (newVal === historyPrevContent) return;
+  const ta = e.target;
+  const cursorAfter = ta.selectionStart;
   const isGrowing = newVal.length > historyPrevContent.length;
+  // 估算修改前的光标位置:
+  //   打字/粘贴(增长) → 光标在选中内容开始处
+  //   删除(缩短) → 光标已在删除位置
+  const cursorBefore = isGrowing
+    ? Math.max(0, cursorAfter - (newVal.length - historyPrevContent.length))
+    : cursorAfter;
+  const now = Date.now();
   const lastIdx = historyUndo.length - 1;
+  const entry = { content: historyPrevContent, cursor: cursorBefore };
   if (lastIdx >= 0 && (now - historyLastTime) < historyMergeMs && isGrowing) {
-    // 合并窗口内 + 内容增长(打字): 替换最后一条, 实现"连续输入一次撤销"
-    historyUndo[lastIdx] = historyPrevContent;
+    // 合并窗口内 + 内容增长(打字): 替换最后一条
+    historyUndo[lastIdx] = entry;
   } else {
-    historyUndo.push(historyPrevContent);
+    historyUndo.push(entry);
     if (historyUndo.length > 100) historyUndo.shift();
   }
   historyLastTime = now;
@@ -643,13 +652,15 @@ function undo() {
   const ta = getEditorEl();
   if (!ta || historyUndo.length === 0) return;
   const current = store.editContent;
-  const prev = historyUndo.pop();
-  historyRedo.push(current);
+  const raw = historyUndo.pop();
+  // 兼容旧版纯字符串条目
+  const prev = typeof raw === 'string' ? raw : raw.content;
+  const cursor = typeof raw === 'string' ? prev.length : Math.min(raw.cursor, prev.length);
+  historyRedo.push({ content: current, cursor: ta.selectionStart });
   historyPrevContent = prev;
   store.editContent = prev;
   nextTick(() => {
-    const pos = prev.length;
-    ta.setSelectionRange(pos, pos);
+    ta.setSelectionRange(cursor, cursor);
     ta.focus();
   });
 }
@@ -657,13 +668,14 @@ function redo() {
   const ta = getEditorEl();
   if (!ta || historyRedo.length === 0) return;
   const current = store.editContent;
-  const next = historyRedo.pop();
-  historyUndo.push(current);
+  const raw = historyRedo.pop();
+  const next = typeof raw === 'string' ? raw : raw.content;
+  const cursor = typeof raw === 'string' ? next.length : Math.min(raw.cursor, next.length);
+  historyUndo.push({ content: current, cursor: ta.selectionStart });
   historyPrevContent = next;
   store.editContent = next;
   nextTick(() => {
-    const pos = next.length;
-    ta.setSelectionRange(pos, pos);
+    ta.setSelectionRange(cursor, cursor);
     ta.focus();
   });
 }
