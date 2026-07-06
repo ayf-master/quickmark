@@ -41,7 +41,7 @@
           v-for="bl in store.currentNoteBacklinks"
           :key="bl.id"
           class="backlink-item"
-          @click="store.openNote(store.notes.find(n => n.id === bl.id))">
+          @click="store.openNote(store.graphNotes.find(n => n.id === bl.id))">
           <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
             <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 19l-7-7m0 0l7-7m-7 7h18"/>
           </svg>

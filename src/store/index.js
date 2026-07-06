@@ -257,7 +257,9 @@ export const store = reactive({
     if (!store.editingNote) return [];
     return findOutlinks(store.editingNote.id, store.notes, store.linkIndex);
   }),
-  graphData: computed(() => buildGraphData(store.notes, store.linkIndex)),
+  graphData: computed(() => buildGraphData(store.graphNotes, store.graphLinkIndex)),
+  graphLinkIndex: computed(() => buildLinkIndex(store.graphNotes)),
+  graphNotes: [],
   hasBacklinks: computed(() => store.currentNoteBacklinks.length > 0),
   hasOutlinks: computed(() => store.currentNoteOutlinks.length > 0),
 
@@ -348,6 +350,16 @@ export const store = reactive({
       store.notes = [];
     } finally {
       store.notesLoading = false;
+    }
+  },
+
+  async loadGraphNotes() {
+    try {
+      const result = await API.getNotes({});
+      store.graphNotes = result || [];
+    } catch (err) {
+      console.error('loadGraphNotes error:', err);
+      store.graphNotes = [];
     }
   },
 

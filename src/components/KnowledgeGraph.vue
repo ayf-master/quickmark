@@ -101,7 +101,7 @@ function initSimulation() {
   const rawEdges = filteredData.value.edges.map(e => ({ ...e }));
   // 给每条边加上来源笔记标题用于标签
   const edgeMeta = filteredData.value.edges.map((e, idx) => {
-    const srcNote = store.notes.find(n => n.id === e.source);
+    const srcNote = store.graphNotes.find(n => n.id === e.source);
     return { ...rawEdges[idx], _src: srcNote?.title || '' };
   });
 
@@ -224,7 +224,7 @@ function initSimulation() {
   // 点击跳转
   node.on('click', (event, d) => {
     event.stopPropagation();
-    const note = store.notes.find(n => n.id === d.id);
+    const note = store.graphNotes.find(n => n.id === d.id);
     if (note) {
       store.openNote(note);
       close();
@@ -312,8 +312,11 @@ function close() {
   store.knowledgeGraphVisible = false;
 }
 
-watch(() => store.knowledgeGraphVisible, (v) => {
-  if (v) nextTick(() => initSimulation());
+watch(() => store.knowledgeGraphVisible, async (v) => {
+  if (v) {
+    await store.loadGraphNotes();
+    nextTick(() => initSimulation());
+  }
 });
 
 watch(filteredData, () => {

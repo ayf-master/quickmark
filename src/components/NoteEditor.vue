@@ -346,7 +346,7 @@
       </div>
 
       <!-- 反向链接面板 -->
-      <BacklinkPanel v-if="store.editMode === 'markdown'" />
+      <BacklinkPanel />
     </div>
 
     <!-- Footer stats -->
