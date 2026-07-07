@@ -92,6 +92,11 @@
   </div>
 </template>
 
+<script>
+// 模块级共享变量 — 跨所有 CategoryTreeNode 实例共享拖拽状态
+let dragCatId = null;
+</script>
+
 <script setup>
 import { ref } from 'vue';
 import { store } from '@/store';
@@ -105,8 +110,6 @@ const emit = defineEmits(['select', 'create-child', 'edit', 'delete', 'toggle-ex
 
 const dragging = ref(false);
 const dropHere = ref(false);
-
-let dragCatId = null;
 
 function onDragStart(e) {
   dragging.value = true;
