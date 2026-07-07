@@ -107,8 +107,14 @@ const API = {
   },
 
   async me() {
-    // me 不走 401-refresh, 因为登录页就是靠它判断
-    const resp = await fetch('/api/auth/me', { credentials: 'include' });
+    let resp = await fetch('/api/auth/me', { credentials: 'include' });
+    // 访问令牌过期但刷新令牌(30天)可能仍有效 → 尝试刷新
+    if (resp.status === 401) {
+      const refreshed = await tryRefresh();
+      if (refreshed) {
+        resp = await fetch('/api/auth/me', { credentials: 'include' });
+      }
+    }
     if (!resp.ok) return null;
     const data = await resp.json();
     return data.user || null;
