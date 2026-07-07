@@ -51,7 +51,7 @@ export const store = reactive({
   editCategoryIds: [],
   editLinks: [], // Wiki 链接标题列表
   markdownAssistEnabled: true,
-  editMode: 'plain', // 'plain' (纯文本) | 'markdown' (Markdown + 预览)
+  editMode: 'markdown', // 'plain' (纯文本) | 'markdown' (Markdown + 预览)
   // 编辑器 UI 状态
   editorPreviewVisible: true, // Markdown 模式下显示预览面板
   editorImageUploading: false, // 上传中标记 (防重复点击)
@@ -488,7 +488,7 @@ export const store = reactive({
     store.editContent = '';
     store.editCategoryIds = [];
     store.editLinks = [];
-    store.editMode = 'plain';
+    store.editMode = 'markdown';
     store.editorPreviewVisible = true;
     if (snapshot && snapshot.id) {
       API.updateNote(snapshot.id, {

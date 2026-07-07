@@ -25,17 +25,6 @@
         <div v-if="store.editingNote" class="mode-switcher" role="tablist" aria-label="编辑器模式">
           <button
             role="tab"
-            :aria-selected="store.editMode === 'plain'"
-            :class="['mode-tab', { active: store.editMode === 'plain' }]"
-            @click="switchMode('plain')"
-            title="纯文本">
-            <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 7h16M4 12h16M4 17h16"/>
-            </svg>
-            纯文本
-          </button>
-          <button
-            role="tab"
             :aria-selected="store.editMode === 'markdown'"
             :class="['mode-tab', { active: store.editMode === 'markdown' }]"
             @click="switchMode('markdown')"
@@ -44,6 +33,17 @@
               <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 20l4-16m4 4l4 4-4 4M6 16l-4-4 4-4"/>
             </svg>
             Markdown
+          </button>
+          <button
+            role="tab"
+            :aria-selected="store.editMode === 'plain'"
+            :class="['mode-tab', { active: store.editMode === 'plain' }]"
+            @click="switchMode('plain')"
+            title="纯文本">
+            <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 7h16M4 12h16M4 17h16"/>
+            </svg>
+            纯文本
           </button>
         </div>
       </div>
