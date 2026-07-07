@@ -773,55 +773,162 @@ function toggleHeading(level) {
   ta.dispatchEvent(new Event('input', { bubbles: true }));
 }
 
-// 切换无序列表: 有前缀去掉, 无前缀加上
+// 切换无序列表: 有前缀去掉, 无前缀加上（支持多行选中）
 function toggleUnorderedList() {
   const ta = contentInput.value;
   if (!ta) return;
   ta.focus();
   const start = ta.selectionStart;
-  const lineStart = ta.value.lastIndexOf('\n', start - 1) + 1;
-  const nlIdx = ta.value.indexOf('\n', start);
-  const lineEnd = nlIdx === -1 ? ta.value.length : nlIdx;
-  const currentLine = ta.value.slice(lineStart, lineEnd);
-  const m = currentLine.match(/^([-*+])\s+/);
-  if (m) {
-    const newLine = currentLine.slice(m[0].length);
-    ta.value = ta.value.slice(0, lineStart) + newLine + ta.value.slice(lineEnd);
-    ta.setSelectionRange(lineStart + newLine.length, lineStart + newLine.length);
-  } else {
-    ta.value = ta.value.slice(0, lineStart) + '- ' + currentLine + ta.value.slice(lineEnd);
-    ta.setSelectionRange(lineStart + 2 + currentLine.length, lineStart + 2 + currentLine.length);
+  const end = ta.selectionEnd;
+
+  // 确定选中区域覆盖的行范围
+  const firstLineStart = ta.value.lastIndexOf('\n', start - 1) + 1;
+  const actualEnd = start === end ? start : end;
+  const lastNl = ta.value.indexOf('\n', actualEnd);
+  const lastLineEnd = lastNl === -1 ? ta.value.length : lastNl;
+
+  // 单行或无跨行选中 → 原有逻辑
+  if (start === end || firstLineStart === lastLineEnd) {
+    const lineStart = firstLineStart;
+    const lineEnd = lastLineEnd;
+    const currentLine = ta.value.slice(lineStart, lineEnd);
+    const m = currentLine.match(/^([-*+])\s+/);
+    if (m) {
+      const newLine = currentLine.slice(m[0].length);
+      ta.value = ta.value.slice(0, lineStart) + newLine + ta.value.slice(lineEnd);
+      ta.setSelectionRange(lineStart + newLine.length, lineStart + newLine.length);
+    } else {
+      ta.value = ta.value.slice(0, lineStart) + '- ' + currentLine + ta.value.slice(lineEnd);
+      ta.setSelectionRange(lineStart + 2 + currentLine.length, lineStart + 2 + currentLine.length);
+    }
+    ta.dispatchEvent(new Event('input', { bubbles: true }));
+    return;
   }
+
+  // 多行选中：收集所有非空行
+  const lines = [];
+  let pos = firstLineStart;
+  while (pos <= lastLineEnd) {
+    const nextNl = ta.value.indexOf('\n', pos);
+    if (nextNl === -1 || nextNl > lastLineEnd) {
+      if (lastLineEnd > pos) lines.push({ start: pos, end: lastLineEnd });
+      break;
+    }
+    if (nextNl > pos) lines.push({ start: pos, end: nextNl });
+    pos = nextNl + 1;
+  }
+
+  if (lines.length === 0) return;
+
+  // 判断是否所有行已有无序列表前缀
+  const allHavePrefix = lines.every(l => /^([-*+])\s+/.test(ta.value.slice(l.start, l.end)));
+
+  if (allHavePrefix) {
+    // 全部去掉前缀（从下往上处理，保持位置正确）
+    for (let i = lines.length - 1; i >= 0; i--) {
+      const l = lines[i];
+      const content = ta.value.slice(l.start, l.end);
+      const m = content.match(/^([-*+])\s+/);
+      if (m) {
+        ta.value = ta.value.slice(0, l.start) + content.slice(m[0].length) + ta.value.slice(l.end);
+      }
+    }
+  } else {
+    // 全部加上前缀（从下往上处理）
+    for (let i = lines.length - 1; i >= 0; i--) {
+      const l = lines[i];
+      const content = ta.value.slice(l.start, l.end);
+      ta.value = ta.value.slice(0, l.start) + '- ' + content + ta.value.slice(l.end);
+    }
+  }
+
   ta.dispatchEvent(new Event('input', { bubbles: true }));
 }
 
-// 切换有序列表: 有前缀去掉, 无前缀加上编号
+// 切换有序列表: 有前缀去掉, 无前缀加上编号（支持多行选中）
 function toggleOrderedList() {
   const ta = contentInput.value;
   if (!ta) return;
   ta.focus();
   const start = ta.selectionStart;
-  const lineStart = ta.value.lastIndexOf('\n', start - 1) + 1;
-  const nlIdx = ta.value.indexOf('\n', start);
-  const lineEnd = nlIdx === -1 ? ta.value.length : nlIdx;
-  const currentLine = ta.value.slice(lineStart, lineEnd);
-  const m = currentLine.match(/^(\d+)\.\s+/);
-  if (m) {
-    const newLine = currentLine.slice(m[0].length);
-    ta.value = ta.value.slice(0, lineStart) + newLine + ta.value.slice(lineEnd);
-    ta.setSelectionRange(lineStart + newLine.length, lineStart + newLine.length);
-  } else {
-    let num = 1;
-    if (lineStart > 0) {
-      const prevLineStart = ta.value.lastIndexOf('\n', lineStart - 2) + 1;
-      const prevLine = ta.value.slice(prevLineStart, lineStart - 1);
-      const prevNum = prevLine.match(/^(\d+)\.\s+/);
-      if (prevNum) num = parseInt(prevNum[1], 10) + 1;
+  const end = ta.selectionEnd;
+
+  const firstLineStart = ta.value.lastIndexOf('\n', start - 1) + 1;
+  const actualEnd = start === end ? start : end;
+  const lastNl = ta.value.indexOf('\n', actualEnd);
+  const lastLineEnd = lastNl === -1 ? ta.value.length : lastNl;
+
+  // 单行或无跨行选中 → 原有逻辑
+  if (start === end || firstLineStart === lastLineEnd) {
+    const lineStart = firstLineStart;
+    const lineEnd = lastLineEnd;
+    const currentLine = ta.value.slice(lineStart, lineEnd);
+    const m = currentLine.match(/^(\d+)\.\s+/);
+    if (m) {
+      const newLine = currentLine.slice(m[0].length);
+      ta.value = ta.value.slice(0, lineStart) + newLine + ta.value.slice(lineEnd);
+      ta.setSelectionRange(lineStart + newLine.length, lineStart + newLine.length);
+    } else {
+      let num = 1;
+      if (lineStart > 0) {
+        const prevLineStart = ta.value.lastIndexOf('\n', lineStart - 2) + 1;
+        const prevLine = ta.value.slice(prevLineStart, lineStart - 1);
+        const prevNum = prevLine.match(/^(\d+)\.\s+/);
+        if (prevNum) num = parseInt(prevNum[1], 10) + 1;
+      }
+      const prefix = num + '. ';
+      ta.value = ta.value.slice(0, lineStart) + prefix + currentLine + ta.value.slice(lineEnd);
+      ta.setSelectionRange(lineStart + prefix.length + currentLine.length, lineStart + prefix.length + currentLine.length);
     }
-    const prefix = num + '. ';
-    ta.value = ta.value.slice(0, lineStart) + prefix + currentLine + ta.value.slice(lineEnd);
-    ta.setSelectionRange(lineStart + prefix.length + currentLine.length, lineStart + prefix.length + currentLine.length);
+    ta.dispatchEvent(new Event('input', { bubbles: true }));
+    return;
   }
+
+  // 多行选中：收集所有非空行
+  const lines = [];
+  let pos = firstLineStart;
+  while (pos <= lastLineEnd) {
+    const nextNl = ta.value.indexOf('\n', pos);
+    if (nextNl === -1 || nextNl > lastLineEnd) {
+      if (lastLineEnd > pos) lines.push({ start: pos, end: lastLineEnd });
+      break;
+    }
+    if (nextNl > pos) lines.push({ start: pos, end: nextNl });
+    pos = nextNl + 1;
+  }
+
+  if (lines.length === 0) return;
+
+  // 判断是否所有行已有有序列表前缀
+  const allHavePrefix = lines.every(l => /^(\d+)\.\s+/.test(ta.value.slice(l.start, l.end)));
+
+  if (allHavePrefix) {
+    // 全部去掉前缀（从下往上）
+    for (let i = lines.length - 1; i >= 0; i--) {
+      const l = lines[i];
+      const content = ta.value.slice(l.start, l.end);
+      const m = content.match(/^(\d+)\.\s+/);
+      if (m) {
+        ta.value = ta.value.slice(0, l.start) + content.slice(m[0].length) + ta.value.slice(l.end);
+      }
+    }
+  } else {
+    // 全部加上编号（从下往上）
+    let baseNum = 1;
+    if (firstLineStart > 0) {
+      const prevLineStart = ta.value.lastIndexOf('\n', firstLineStart - 2) + 1;
+      const prevLine = ta.value.slice(prevLineStart, firstLineStart - 1);
+      const prevNum = prevLine.match(/^(\d+)\.\s+/);
+      if (prevNum) baseNum = parseInt(prevNum[1], 10) + 1;
+    }
+    for (let i = lines.length - 1; i >= 0; i--) {
+      const l = lines[i];
+      const content = ta.value.slice(l.start, l.end);
+      const prefix = (baseNum + i) + '. ';
+      ta.value = ta.value.slice(0, l.start) + prefix + content + ta.value.slice(l.end);
+    }
+  }
+
   ta.dispatchEvent(new Event('input', { bubbles: true }));
 }
 
