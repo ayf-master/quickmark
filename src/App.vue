@@ -41,6 +41,7 @@
       <CategoryDialog />
       <NewNoteDialog />
       <ShortcutHelp />
+      <PreferenceDialog />
       <UserGuide />
       <OnboardingTour />
       <KnowledgeGraph />
@@ -61,6 +62,7 @@ import NoteEditor from '@/components/NoteEditor.vue';
 import CategoryDialog from '@/components/CategoryDialog.vue';
 import NewNoteDialog from '@/components/NewNoteDialog.vue';
 import ShortcutHelp from '@/components/ShortcutHelp.vue';
+import PreferenceDialog from '@/components/PreferenceDialog.vue';
 import UserGuide from '@/components/UserGuide.vue';
 import OnboardingTour from '@/components/OnboardingTour.vue';
 import Toast from '@/components/Toast.vue';

@@ -69,6 +69,7 @@ export const store = reactive({
   sidebarCollapsed: false, // 桌面端侧边栏折叠
   noteListCollapsed: false, // 桌面端笔记列表折叠
   shortcutPanelVisible: false,
+  preferencePanelVisible: false,
   userGuideVisible: false,
   showNewCategoryDialog: false,
   showEditCategoryDialog: false,

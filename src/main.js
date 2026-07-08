@@ -78,7 +78,7 @@ function globalKeydown(e) {
       return;
     }
     // Esc 关闭编辑器
-    if (e.key === 'Escape' && !store.shortcutPanelVisible && !store.userGuideVisible && !store.newNoteDialogOpen && !store.showNewCategoryDialog && !store.showEditCategoryDialog && !store.mobileDrawerOpen) {
+    if (e.key === 'Escape' && !store.preferencePanelVisible && !store.shortcutPanelVisible && !store.userGuideVisible && !store.newNoteDialogOpen && !store.showNewCategoryDialog && !store.showEditCategoryDialog && !store.mobileDrawerOpen) {
       store.closeEditor();
       return;
     }
@@ -102,6 +102,10 @@ function globalKeydown(e) {
 
   // ESC 关闭浮层 (优先级: 面板 > 抽屉 > 弹窗)
   if (e.key === 'Escape') {
+    if (store.preferencePanelVisible) {
+      store.preferencePanelVisible = false;
+      return;
+    }
     if (store.shortcutPanelVisible) {
       store.shortcutPanelVisible = false;
       return;
