@@ -318,6 +318,8 @@
             ref="contentInput"
             @keydown="handleEditorKeydown"
             @input="onEditorInput"
+            @click="checkOrderedListMerge"
+            @keyup="checkOrderedListMerge"
             @paste="handlePaste"
             :placeholder="store.editorImageUploading ? '图片上传中...' : '开始用 Markdown 记录...'"
             class="md-editor"
@@ -345,6 +347,17 @@
             :aria-label="'纯文本正文'"
             spellcheck="false"></textarea>
         </div>
+      </div>
+
+      <!-- 有序列表合并提示 -->
+      <div v-if="orderedListMerge"
+        class="flex items-center justify-center gap-2 py-1.5 px-3 text-xs rounded-md mx-4 sm:mx-6 mb-2 cursor-pointer select-none"
+        style="background: var(--color-accent-15, #3b82f620); color: var(--color-accent, #3b82f6); border: 1px solid var(--color-accent-30, #3b82f640);"
+        @click.stop="mergeOrderedList"
+        title="点击将序号续接上方列表">
+        <span>序号重新开始编排</span>
+        <span style="opacity:0.6;">·</span>
+        <span>点击合并为 <strong>{{ orderedListMerge.targetNum }}</strong>. 开始继续编号</span>
       </div>
 
       <!-- 反向链接面板 -->
@@ -602,6 +615,75 @@ let historyLastTime = 0;
 let historyMergeMs = 500; // 连续输入合并窗口 (ms)
 let historyPrevContent = "";
 
+// 有序列表合并（重新开始编排的序号 → 续号合并）
+const orderedListMerge = ref(null);
+
+function checkOrderedListMerge() {
+  const ta = store.editMode === 'markdown' ? contentInput.value : null;
+  if (!ta) { orderedListMerge.value = null; return; }
+  const pos = ta.selectionStart;
+  const value = store.editContent;
+  if (!value) { orderedListMerge.value = null; return; }
+  const curLineStart = value.lastIndexOf('\n', pos - 1) + 1;
+  const nextNl = value.indexOf('\n', curLineStart);
+  const curLineEnd = nextNl === -1 ? value.length : nextNl;
+  const curLine = value.slice(curLineStart, curLineEnd);
+  const curM = curLine.match(/^(\d+)\.\s+/);
+  // 需要前一行也存在有序前缀
+  if (!curM || curLineStart === 0) { orderedListMerge.value = null; return; }
+  const curNum = parseInt(curM[1], 10);
+  const prevLineStart = value.lastIndexOf('\n', curLineStart - 2) + 1;
+  const prevLine = value.slice(prevLineStart, curLineStart - 1);
+  const prevM = prevLine.match(/^(\d+)\.\s+/);
+  if (!prevM) { orderedListMerge.value = null; return; }
+  const prevNum = parseInt(prevM[1], 10);
+  // 当前行序号不是前一行的续号 → 是重新开始的 → 提供合并
+  if (curNum !== prevNum + 1) {
+    orderedListMerge.value = { lineStart: curLineStart, targetNum: prevNum + 1, prevNum };
+  } else {
+    orderedListMerge.value = null;
+  }
+}
+
+function mergeOrderedList() {
+  const merge = orderedListMerge.value;
+  if (!merge || !contentInput.value) return;
+  const ta = contentInput.value;
+  const value = store.editContent;
+  // 从合并行开始，收集所有连续的有序行
+  const lines = [];
+  let pos = merge.lineStart;
+  while (pos < value.length) {
+    const nl = value.indexOf('\n', pos);
+    const lineEnd = nl === -1 ? value.length : nl;
+    const line = value.slice(pos, lineEnd);
+    if (!/^(\d+)\.\s+/.test(line)) break;
+    lines.push({ start: pos, end: lineEnd, content: line });
+    if (nl === -1) break;
+    pos = nl + 1;
+  }
+  if (lines.length === 0) { orderedListMerge.value = null; return; }
+  // 手动记录撤销历史
+  if (historyReady && value !== historyPrevContent) {
+    historyUndo.push({ content: historyPrevContent, cursor: ta.selectionStart });
+    if (historyUndo.length > 100) historyUndo.shift();
+    historyRedo.length = 0;
+  }
+  let newContent = value;
+  for (let i = lines.length - 1; i >= 0; i--) {
+    const l = lines[i];
+    const m = l.content.match(/^(\d+)\.\s+/);
+    if (m) {
+      const prefix = (merge.targetNum + i) + '. ';
+      newContent = newContent.slice(0, l.start) + prefix + l.content.slice(m[0].length) + newContent.slice(l.end);
+    }
+  }
+  historyPrevContent = newContent;
+  historyLastTime = Date.now();
+  store.editContent = newContent;
+  orderedListMerge.value = null;
+}
+
 // 切换笔记时清空历史栈 + 同步初始内容
 watch(() => store.editingNote?.id, () => {
   historyUndo = [];
@@ -773,7 +855,7 @@ function toggleHeading(level) {
   ta.dispatchEvent(new Event('input', { bubbles: true }));
 }
 
-// 切换无序列表: 有前缀去掉, 无前缀加上（支持多行选中）
+// 切换无序列表: 有前缀去掉, 无前缀加上; 有序可交叉切换（支持多行选中）
 function toggleUnorderedList() {
   const ta = contentInput.value;
   if (!ta) return;
@@ -787,25 +869,7 @@ function toggleUnorderedList() {
   const lastNl = ta.value.indexOf('\n', actualEnd);
   const lastLineEnd = lastNl === -1 ? ta.value.length : lastNl;
 
-  // 单行或无跨行选中 → 原有逻辑
-  if (start === end || firstLineStart === lastLineEnd) {
-    const lineStart = firstLineStart;
-    const lineEnd = lastLineEnd;
-    const currentLine = ta.value.slice(lineStart, lineEnd);
-    const m = currentLine.match(/^([-*+])\s+/);
-    if (m) {
-      const newLine = currentLine.slice(m[0].length);
-      ta.value = ta.value.slice(0, lineStart) + newLine + ta.value.slice(lineEnd);
-      ta.setSelectionRange(lineStart + newLine.length, lineStart + newLine.length);
-    } else {
-      ta.value = ta.value.slice(0, lineStart) + '- ' + currentLine + ta.value.slice(lineEnd);
-      ta.setSelectionRange(lineStart + 2 + currentLine.length, lineStart + 2 + currentLine.length);
-    }
-    ta.dispatchEvent(new Event('input', { bubbles: true }));
-    return;
-  }
-
-  // 多行选中：收集所有非空行
+  // 收集所有受影响的行（统一单行/多行）
   const lines = [];
   let pos = firstLineStart;
   while (pos <= lastLineEnd) {
@@ -817,14 +881,23 @@ function toggleUnorderedList() {
     if (nextNl > pos) lines.push({ start: pos, end: nextNl });
     pos = nextNl + 1;
   }
-
   if (lines.length === 0) return;
 
-  // 判断是否所有行已有无序列表前缀
-  const allHavePrefix = lines.every(l => /^([-*+])\s+/.test(ta.value.slice(l.start, l.end)));
+  const allOrdered = lines.every(l => /^(\d+)\.\s+/.test(ta.value.slice(l.start, l.end)));
+  const allUnordered = lines.every(l => /^([-*+])\s+/.test(ta.value.slice(l.start, l.end)));
 
-  if (allHavePrefix) {
-    // 全部去掉前缀（从下往上处理，保持位置正确）
+  if (allOrdered) {
+    // 有序 → 无序（交叉切换）
+    for (let i = lines.length - 1; i >= 0; i--) {
+      const l = lines[i];
+      const content = ta.value.slice(l.start, l.end);
+      const m = content.match(/^(\d+)\.\s+/);
+      if (m) {
+        ta.value = ta.value.slice(0, l.start) + '- ' + content.slice(m[0].length) + ta.value.slice(l.end);
+      }
+    }
+  } else if (allUnordered) {
+    // 全部去掉无序前缀（取消列表）
     for (let i = lines.length - 1; i >= 0; i--) {
       const l = lines[i];
       const content = ta.value.slice(l.start, l.end);
@@ -834,7 +907,7 @@ function toggleUnorderedList() {
       }
     }
   } else {
-    // 全部加上前缀（从下往上处理）
+    // 全部加上无序前缀
     for (let i = lines.length - 1; i >= 0; i--) {
       const l = lines[i];
       const content = ta.value.slice(l.start, l.end);
@@ -845,7 +918,7 @@ function toggleUnorderedList() {
   ta.dispatchEvent(new Event('input', { bubbles: true }));
 }
 
-// 切换有序列表: 有前缀去掉, 无前缀加上编号（支持多行选中）
+// 切换有序列表: 有前缀去掉, 无前缀加上编号; 无序可交叉切换（支持多行选中）
 function toggleOrderedList() {
   const ta = contentInput.value;
   if (!ta) return;
@@ -858,33 +931,7 @@ function toggleOrderedList() {
   const lastNl = ta.value.indexOf('\n', actualEnd);
   const lastLineEnd = lastNl === -1 ? ta.value.length : lastNl;
 
-  // 单行或无跨行选中 → 原有逻辑
-  if (start === end || firstLineStart === lastLineEnd) {
-    const lineStart = firstLineStart;
-    const lineEnd = lastLineEnd;
-    const currentLine = ta.value.slice(lineStart, lineEnd);
-    const m = currentLine.match(/^(\d+)\.\s+/);
-    if (m) {
-      const newLine = currentLine.slice(m[0].length);
-      ta.value = ta.value.slice(0, lineStart) + newLine + ta.value.slice(lineEnd);
-      ta.setSelectionRange(lineStart + newLine.length, lineStart + newLine.length);
-    } else {
-      let num = 1;
-      if (lineStart > 0) {
-        const prevLineStart = ta.value.lastIndexOf('\n', lineStart - 2) + 1;
-        const prevLine = ta.value.slice(prevLineStart, lineStart - 1);
-        const prevNum = prevLine.match(/^(\d+)\.\s+/);
-        if (prevNum) num = parseInt(prevNum[1], 10) + 1;
-      }
-      const prefix = num + '. ';
-      ta.value = ta.value.slice(0, lineStart) + prefix + currentLine + ta.value.slice(lineEnd);
-      ta.setSelectionRange(lineStart + prefix.length + currentLine.length, lineStart + prefix.length + currentLine.length);
-    }
-    ta.dispatchEvent(new Event('input', { bubbles: true }));
-    return;
-  }
-
-  // 多行选中：收集所有非空行
+  // 收集所有受影响的行（统一单行/多行）
   const lines = [];
   let pos = firstLineStart;
   while (pos <= lastLineEnd) {
@@ -896,14 +943,31 @@ function toggleOrderedList() {
     if (nextNl > pos) lines.push({ start: pos, end: nextNl });
     pos = nextNl + 1;
   }
-
   if (lines.length === 0) return;
 
-  // 判断是否所有行已有有序列表前缀
-  const allHavePrefix = lines.every(l => /^(\d+)\.\s+/.test(ta.value.slice(l.start, l.end)));
+  const allUnordered = lines.every(l => /^([-*+])\s+/.test(ta.value.slice(l.start, l.end)));
+  const allOrdered = lines.every(l => /^(\d+)\.\s+/.test(ta.value.slice(l.start, l.end)));
 
-  if (allHavePrefix) {
-    // 全部去掉前缀（从下往上）
+  if (allUnordered) {
+    // 无序 → 有序（交叉切换），自动编序号
+    let num = 1;
+    if (firstLineStart > 0) {
+      const prevLineStart = ta.value.lastIndexOf('\n', firstLineStart - 2) + 1;
+      const prevLine = ta.value.slice(prevLineStart, firstLineStart - 1);
+      const prevNum = prevLine.match(/^(\d+)\.\s+/);
+      if (prevNum) num = parseInt(prevNum[1], 10) + 1;
+    }
+    for (let i = lines.length - 1; i >= 0; i--) {
+      const l = lines[i];
+      const content = ta.value.slice(l.start, l.end);
+      const m = content.match(/^([-*+])\s+/);
+      if (m) {
+        const prefix = (num + i) + '. ';
+        ta.value = ta.value.slice(0, l.start) + prefix + content.slice(m[0].length) + ta.value.slice(l.end);
+      }
+    }
+  } else if (allOrdered) {
+    // 全部去掉有序前缀（取消列表）
     for (let i = lines.length - 1; i >= 0; i--) {
       const l = lines[i];
       const content = ta.value.slice(l.start, l.end);
@@ -913,7 +977,7 @@ function toggleOrderedList() {
       }
     }
   } else {
-    // 全部加上编号（从下往上）
+    // 全部加上有序前缀（从下往上）
     let baseNum = 1;
     if (firstLineStart > 0) {
       const prevLineStart = ta.value.lastIndexOf('\n', firstLineStart - 2) + 1;
