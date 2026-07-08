@@ -107,6 +107,45 @@
             <ThemeToggle />
           </div>
 
+          <!-- 默认编辑器偏好 -->
+          <div class="px-4 py-2 border-t" style="border-color: var(--border-default);">
+            <div class="text-xs font-medium mb-2" style="color: var(--text-tertiary);">
+              默认编辑器
+            </div>
+            <div class="flex flex-col gap-1">
+              <label class="flex items-center gap-2 text-sm cursor-pointer rounded px-1 py-1 transition-colors"
+                style="color: var(--text-primary);"
+                @mouseenter="(e) => e.currentTarget.style.background = 'var(--bg-panel)'"
+                @mouseleave="(e) => e.currentTarget.style.background = 'transparent'">
+                <input type="radio" name="defaultMode" value="auto"
+                  :checked="store.defaultEditMode === 'auto'"
+                  @change="store.setDefaultEditMode('auto')"
+                  class="accent-current">
+                自动检测
+              </label>
+              <label class="flex items-center gap-2 text-sm cursor-pointer rounded px-1 py-1 transition-colors"
+                style="color: var(--text-primary);"
+                @mouseenter="(e) => e.currentTarget.style.background = 'var(--bg-panel)'"
+                @mouseleave="(e) => e.currentTarget.style.background = 'transparent'">
+                <input type="radio" name="defaultMode" value="markdown"
+                  :checked="store.defaultEditMode === 'markdown'"
+                  @change="store.setDefaultEditMode('markdown')"
+                  class="accent-current">
+                Markdown
+              </label>
+              <label class="flex items-center gap-2 text-sm cursor-pointer rounded px-1 py-1 transition-colors"
+                style="color: var(--text-primary);"
+                @mouseenter="(e) => e.currentTarget.style.background = 'var(--bg-panel)'"
+                @mouseleave="(e) => e.currentTarget.style.background = 'transparent'">
+                <input type="radio" name="defaultMode" value="plain"
+                  :checked="store.defaultEditMode === 'plain'"
+                  @change="store.setDefaultEditMode('plain')"
+                  class="accent-current">
+                纯文本
+              </label>
+            </div>
+          </div>
+
           <div class="border-t my-1" style="border-color: var(--border-default);"></div>
 
           <!-- 使用指南 -->

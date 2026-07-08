@@ -52,6 +52,9 @@ export const store = reactive({
   editLinks: [], // Wiki 链接标题列表
   markdownAssistEnabled: true,
   editMode: 'markdown', // 'plain' (纯文本) | 'markdown' (Markdown + 预览)
+  defaultEditMode: (() => {
+    try { return localStorage.getItem('quickmark-default-mode') || 'auto'; } catch { return 'auto'; }
+  })(), // 'auto' | 'markdown' | 'plain' — 用户偏好, 打开笔记时优先于 detectContentMode
   // 编辑器 UI 状态
   editorPreviewVisible: true, // Markdown 模式下显示预览面板
   editorImageUploading: false, // 上传中标记 (防重复点击)
@@ -335,6 +338,13 @@ export const store = reactive({
     store.applyTheme();
   },
 
+  // ===== 默认编辑器模式偏好 =====
+  setDefaultEditMode(mode) {
+    if (!['auto', 'markdown', 'plain'].includes(mode)) return;
+    store.defaultEditMode = mode;
+    try { localStorage.setItem('quickmark-default-mode', mode); } catch {}
+  },
+
   // ===== Data loading =====
   async loadNotes() {
     store.notesLoading = true;
@@ -462,7 +472,9 @@ export const store = reactive({
     }
     store.editContent = content;
     store.editCategoryIds = note.category_ids ? [...note.category_ids] : [];
-    store.editMode = detectContentMode(store.editContent);
+    store.editMode = store.defaultEditMode !== 'auto'
+      ? store.defaultEditMode
+      : detectContentMode(store.editContent);
   },
 
   setEditMode(mode) {
