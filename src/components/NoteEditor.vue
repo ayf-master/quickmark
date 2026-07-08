@@ -980,30 +980,17 @@ function toggleQuote() {
   ta.focus();
   const start = ta.selectionStart;
   const end = ta.selectionEnd;
-  const firstLineStart = ta.value.lastIndexOf('\n', start - 1) + 1;
+  const value = store.editContent;
+  const firstLineStart = value.lastIndexOf('\n', start - 1) + 1;
   const actualEnd = start === end ? start : end;
-  const lastNl = ta.value.indexOf('\n', actualEnd);
-  const lastLineEnd = lastNl === -1 ? ta.value.length : lastNl;
+  const lastNl = value.indexOf('\n', actualEnd);
+  const lastLineEnd = lastNl === -1 ? value.length : lastNl;
 
-  // 单行或无跨行
-  if (start === end || firstLineStart === lastLineEnd) {
-    const lineStart = firstLineStart;
-    const lineEnd = lastLineEnd;
-    const currentLine = ta.value.slice(lineStart, lineEnd);
-    if (currentLine.startsWith('> ')) {
-      ta.value = ta.value.slice(0, lineStart) + currentLine.slice(2) + ta.value.slice(lineEnd);
-    } else {
-      ta.value = ta.value.slice(0, lineStart) + '> ' + currentLine + ta.value.slice(lineEnd);
-    }
-    ta.dispatchEvent(new Event('input', { bubbles: true }));
-    return;
-  }
-
-  // 多行选中
+  // 收集所有受影响的行
   const lines = [];
   let pos = firstLineStart;
   while (pos <= lastLineEnd) {
-    const nextNl = ta.value.indexOf('\n', pos);
+    const nextNl = value.indexOf('\n', pos);
     if (nextNl === -1 || nextNl > lastLineEnd) {
       if (lastLineEnd > pos) lines.push({ start: pos, end: lastLineEnd });
       break;
@@ -1013,17 +1000,38 @@ function toggleQuote() {
   }
   if (lines.length === 0) return;
 
-  const allHavePrefix = lines.every(l => ta.value.slice(l.start, l.end).startsWith('> '));
+  const allHavePrefix = lines.every(l => value.slice(l.start, l.end).startsWith('> '));
+  let newContent = value;
   for (let i = lines.length - 1; i >= 0; i--) {
     const l = lines[i];
-    const content = ta.value.slice(l.start, l.end);
+    const content = newContent.slice(l.start, l.end);
     if (allHavePrefix) {
-      ta.value = ta.value.slice(0, l.start) + content.replace(/^> /, '') + ta.value.slice(l.end);
+      newContent = newContent.slice(0, l.start) + content.replace(/^> /, '') + newContent.slice(l.end);
     } else {
-      ta.value = ta.value.slice(0, l.start) + '> ' + content + ta.value.slice(l.end);
+      newContent = newContent.slice(0, l.start) + '> ' + content + newContent.slice(l.end);
     }
   }
-  ta.dispatchEvent(new Event('input', { bubbles: true }));
+
+  // 手动记录撤销历史
+  if (historyReady && value !== historyPrevContent) {
+    const entry = { content: historyPrevContent, cursor: start };
+    historyUndo.push(entry);
+    if (historyUndo.length > 100) historyUndo.shift();
+    historyRedo.length = 0;
+  }
+  historyPrevContent = newContent;
+  historyLastTime = Date.now();
+
+  store.editContent = newContent;
+
+  // Vue 渲染后恢复光标
+  nextTick(() => {
+    const delta = allHavePrefix ? -2 : 2;
+    ta.setSelectionRange(
+      Math.max(0, start + delta),
+      Math.max(0, end + delta)
+    );
+  });
 }
 
 // 切换行内代码: 有 ` 则去掉, 无则加上（上下文感知, 和粗体/斜体一样）
