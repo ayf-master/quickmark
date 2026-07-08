@@ -219,15 +219,15 @@
               <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 6h11M10 12h11M10 18h11M4 5.5v4M4 11.5v4M4 15.5l2 2.5M4 18h2.5"/>
             </svg>
           </button>
-          <button @click="mdInsert('> ', '', '引用')" class="md-tool" title="引用">
+          <button @click="toggleQuote()" class="md-tool" title="引用">
             <svg class="w-3.5 h-3.5" fill="currentColor" viewBox="0 0 24 24">
               <path d="M6 17h3l2-4V7H5v6h3l-2 4zm8 0h3l2-4V7h-6v6h3l-2 4z"/>
             </svg>
           </button>
-          <button @click="insertInlineCode" class="md-tool" title="行内代码">
+          <button @click="toggleInlineCode()" class="md-tool" title="行内代码">
             <code class="text-[11px] font-mono">{{ inlineCodeLabel }}</code>
           </button>
-          <button @click="insertCodeBlock" class="md-tool" title="代码块">{{ codeBlockLabel }}</button>
+          <button @click="toggleCodeBlock()" class="md-tool" title="代码块">{{ codeBlockLabel }}</button>
         </div>
         <div class="md-toolbar-divider"></div>
         <div class="md-toolbar-group">
@@ -949,21 +949,173 @@ function toggleInline(prefix, suffix) {
     ta.dispatchEvent(new Event('input', { bubbles: true }));
     return;
   }
-  // 检查是否已被包裹
+  // 检查选中内容本身是否已被包裹 (选中了标记+文字, 如 **text**)
   if (selected.startsWith(prefix) && selected.endsWith(suffix) && selected.length > prefix.length + suffix.length) {
-    // 去掉包裹
     const inner = selected.slice(prefix.length, -suffix.length);
     ta.value = before + inner + after;
     ta.setSelectionRange(start, start + inner.length);
-  } else {
-    ta.value = before + prefix + selected + suffix + after;
-    ta.setSelectionRange(start + prefix.length, start + prefix.length + selected.length);
+    ta.dispatchEvent(new Event('input', { bubbles: true }));
+    return;
   }
+  // 检查上下文是否已包裹 (标记在选区外面, 和 wrapAnnotation 一样的逻辑)
+  if (before.endsWith(prefix) && after.startsWith(suffix)) {
+    ta.value = before.slice(0, -prefix.length) + selected + after.slice(suffix.length);
+    ta.setSelectionRange(start - prefix.length, start - prefix.length + selected.length);
+    ta.dispatchEvent(new Event('input', { bubbles: true }));
+    return;
+  }
+  // 包裹选中文本
+  ta.value = before + prefix + selected + suffix + after;
+  ta.setSelectionRange(start + prefix.length, start + prefix.length + selected.length);
   ta.dispatchEvent(new Event('input', { bubbles: true }));
 }
 function toggleBold() { toggleInline('**', '**'); }
 function toggleItalic() { toggleInline('*', '*'); }
 function toggleStrikethrough() { toggleInline('~~', '~~'); }
+
+// 切换引用: 行首有 > 则去掉, 无则加上（支持多行）
+function toggleQuote() {
+  const ta = contentInput.value;
+  if (!ta) return;
+  ta.focus();
+  const start = ta.selectionStart;
+  const end = ta.selectionEnd;
+  const firstLineStart = ta.value.lastIndexOf('\n', start - 1) + 1;
+  const actualEnd = start === end ? start : end;
+  const lastNl = ta.value.indexOf('\n', actualEnd);
+  const lastLineEnd = lastNl === -1 ? ta.value.length : lastNl;
+
+  // 单行或无跨行
+  if (start === end || firstLineStart === lastLineEnd) {
+    const lineStart = firstLineStart;
+    const lineEnd = lastLineEnd;
+    const currentLine = ta.value.slice(lineStart, lineEnd);
+    if (currentLine.startsWith('> ')) {
+      ta.value = ta.value.slice(0, lineStart) + currentLine.slice(2) + ta.value.slice(lineEnd);
+    } else {
+      ta.value = ta.value.slice(0, lineStart) + '> ' + currentLine + ta.value.slice(lineEnd);
+    }
+    ta.dispatchEvent(new Event('input', { bubbles: true }));
+    return;
+  }
+
+  // 多行选中
+  const lines = [];
+  let pos = firstLineStart;
+  while (pos <= lastLineEnd) {
+    const nextNl = ta.value.indexOf('\n', pos);
+    if (nextNl === -1 || nextNl > lastLineEnd) {
+      if (lastLineEnd > pos) lines.push({ start: pos, end: lastLineEnd });
+      break;
+    }
+    if (nextNl > pos) lines.push({ start: pos, end: nextNl });
+    pos = nextNl + 1;
+  }
+  if (lines.length === 0) return;
+
+  const allHavePrefix = lines.every(l => ta.value.slice(l.start, l.end).startsWith('> '));
+  for (let i = lines.length - 1; i >= 0; i--) {
+    const l = lines[i];
+    const content = ta.value.slice(l.start, l.end);
+    if (allHavePrefix) {
+      ta.value = ta.value.slice(0, l.start) + content.replace(/^> /, '') + ta.value.slice(l.end);
+    } else {
+      ta.value = ta.value.slice(0, l.start) + '> ' + content + ta.value.slice(l.end);
+    }
+  }
+  ta.dispatchEvent(new Event('input', { bubbles: true }));
+}
+
+// 切换行内代码: 有 ` 则去掉, 无则加上（上下文感知, 和粗体/斜体一样）
+function toggleInlineCode() {
+  const ta = contentInput.value;
+  if (!ta) return;
+  ta.focus();
+  const start = ta.selectionStart;
+  const end = ta.selectionEnd;
+  const before = ta.value.slice(0, start);
+  const selected = ta.value.slice(start, end);
+  const after = ta.value.slice(end);
+
+  if (start === end) {
+    ta.value = before + '``' + after;
+    ta.setSelectionRange(start + 1, start + 1);
+    ta.dispatchEvent(new Event('input', { bubbles: true }));
+    return;
+  }
+
+  // 选中了标记+文字: ``code`` 或 `code`
+  if (selected.startsWith('`') && selected.endsWith('`') && selected.length > 2) {
+    const inner = selected.slice(1, -1);
+    ta.value = before + inner + after;
+    ta.setSelectionRange(start, start + inner.length);
+    ta.dispatchEvent(new Event('input', { bubbles: true }));
+    return;
+  }
+
+  // 上下文已包裹: `code` 选中了中间的 code
+  if (before.endsWith('`') && after.startsWith('`')) {
+    ta.value = before.slice(0, -1) + selected + after.slice(1);
+    ta.setSelectionRange(start - 1, start - 1 + selected.length);
+    ta.dispatchEvent(new Event('input', { bubbles: true }));
+    return;
+  }
+
+  // 包裹
+  ta.value = before + '`' + selected + '`' + after;
+  ta.setSelectionRange(start + 1, start + 1 + selected.length);
+  ta.dispatchEvent(new Event('input', { bubbles: true }));
+}
+
+// 切换代码块: 有 ``` 环绕则去掉, 无则加上
+function toggleCodeBlock() {
+  const ta = contentInput.value;
+  if (!ta) return;
+  ta.focus();
+  const start = ta.selectionStart;
+  const lineStart = ta.value.lastIndexOf('\n', start - 1) + 1;
+  const nlIdx = ta.value.indexOf('\n', start);
+  const lineEnd = nlIdx === -1 ? ta.value.length : nlIdx;
+  const currentLine = ta.value.slice(lineStart, lineEnd);
+
+  // 检查前后行是否 ``` 包围
+  const prevLineStart = lineStart > 0 ? ta.value.lastIndexOf('\n', lineStart - 2) + 1 : -1;
+  const prevLine = prevLineStart >= 0 ? ta.value.slice(prevLineStart, lineStart - 1) : '';
+  const nextNl = ta.value.indexOf('\n', lineEnd + 1);
+  const nextLine = nextNl > 0 ? ta.value.slice(lineEnd + 1, nextNl) : '';
+  const prevIsFence = prevLine.trim() === '```';
+  const nextIsFence = nextLine.trim() === '```';
+
+  if (prevIsFence && nextIsFence) {
+    // 去掉上下包围的 ``` 行
+    const beforeFence = prevLineStart >= 0 ? ta.value.slice(0, prevLineStart) : '';
+    const afterFence = ta.value.slice(nextNl);
+    ta.value = beforeFence + currentLine + afterFence;
+    const newCursor = beforeFence.length;
+    ta.setSelectionRange(newCursor, newCursor + currentLine.length);
+    ta.dispatchEvent(new Event('input', { bubbles: true }));
+    return;
+  }
+
+  // 当前行本身就是 ``` 行 → 去掉本行
+  if (/^```/.test(currentLine.trim())) {
+    const before = ta.value.slice(0, lineStart);
+    const after = ta.value.slice(lineEnd + 1); // 跳过换行符
+    ta.value = before + after;
+    ta.setSelectionRange(lineStart, lineStart);
+    ta.dispatchEvent(new Event('input', { bubbles: true }));
+    return;
+  }
+
+  // 包裹为代码块
+  const before = ta.value.slice(0, lineStart);
+  const after = ta.value.slice(lineEnd);
+  const newText = '```\n' + (currentLine || '代码') + '\n```';
+  ta.value = before + newText + after;
+  const cursor = lineStart + 4 + (currentLine || '代码').length;
+  ta.setSelectionRange(cursor, cursor);
+  ta.dispatchEvent(new Event('input', { bubbles: true }));
+}
 
 // 包裹选中文本
 function mdWrap(prefix, suffix, placeholder) {
@@ -986,17 +1138,6 @@ function mdWrap(prefix, suffix, placeholder) {
 const inlineCodeLabel = '</>';
 const codeBlockLabel = '{}';
 
-// 行内代码 (反引号 \u0060 在 JS 字符串里合法, 不经过模板 parser)
-function insertInlineCode() {
-  mdWrap('\u0060', '\u0060', '代码');
-}
-
-// 代码块 (反引号 \u0060 + 换行 \n 在 setup 体内正常, 不进模板)
-function insertCodeBlock() {
-  mdInsertLine('\u0060\u0060\u0060\n', '\n\u0060\u0060\u0060', '代码块');
-}
-
-// 插入图片 (Markdown): 弹文件选择 -> 上传 -> 插入 ![](url)
 function mdInsertImage() {
   fileInput.value?.click();
 }
