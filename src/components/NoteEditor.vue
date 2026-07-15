@@ -1417,12 +1417,12 @@ function handleEditorKeydown(e) {
   ta.dispatchEvent(new Event('input', { bubbles: true }));
 }
 
-// 预览区点击链接: 阻止默认跳转,改为新窗口打开
+// 预览区点击: 链接 / 图片放大
 function handlePreviewClick(e) {
-  // 图片放大按钮
-  const btn = e.target.closest('.img-zoom-btn');
-  if (btn) {
-    const src = btn.dataset.imgSrc;
+  // 点击图片本身或放大按钮 → 全屏
+  const img = e.target.closest('.img-wrapper img, .img-zoom-btn');
+  if (img) {
+    const src = img.dataset.imgSrc || img.getAttribute('src');
     if (src) {
       fullscreenImage.value = src;
     }
@@ -1679,31 +1679,42 @@ document.addEventListener('keydown', onKeydown);
   position: relative;
   display: inline-block;
   max-width: 100%;
+  min-width: 60px;
+  min-height: 60px;
+  vertical-align: top;
+}
+/* 图片本身点击也可放大 */
+.md-preview :deep(.img-wrapper img) {
+  cursor: zoom-in;
 }
 .md-preview :deep(.img-wrapper:hover .img-zoom-btn) {
   opacity: 1;
+  background: rgba(0,0,0,0.7);
 }
 .md-preview :deep(.img-zoom-btn) {
   position: absolute;
-  top: 12px;
-  right: 12px;
-  width: 36px;
-  height: 36px;
+  top: 8px;
+  right: 8px;
+  width: 32px;
+  height: 32px;
   border-radius: 8px;
-  background: rgba(0,0,0,0.55);
+  background: rgba(0,0,0,0.5);
   color: #fff;
   border: none;
   cursor: pointer;
   display: flex;
   align-items: center;
   justify-content: center;
-  opacity: 0;
-  transition: opacity 0.2s, background 0.2s;
+  opacity: 0.7;
+  transition: opacity 0.2s, background 0.2s, transform 0.15s;
   backdrop-filter: blur(4px);
   -webkit-backdrop-filter: blur(4px);
+  z-index: 1;
 }
 .md-preview :deep(.img-zoom-btn:hover) {
+  opacity: 1;
   background: rgba(0,0,0,0.75);
+  transform: scale(1.1);
 }
 .md-preview :deep(hr) {
   border: none;
