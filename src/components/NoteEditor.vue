@@ -380,6 +380,24 @@
         {{ store.editorImageUploading ? '上传中...' : '自动保存' }}
       </span>
     </footer>
+
+    <!-- 图片全屏查看 -->
+    <Teleport to="body">
+      <div v-if="fullscreenImage"
+        class="img-fullscreen-overlay"
+        @click.self="fullscreenImage = null"
+        @keydown.escape="fullscreenImage = null"
+        tabindex="0"
+        ref="fullscreenOverlay">
+        <button class="img-fullscreen-close" @click="fullscreenImage = null" aria-label="关闭">
+          <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <line x1="18" y1="6" x2="6" y2="18"/>
+            <line x1="6" y1="6" x2="18" y2="18"/>
+          </svg>
+        </button>
+        <img :src="fullscreenImage" class="img-fullscreen-content" alt="全屏图片">
+      </div>
+    </Teleport>
   </section>
 </template>
 
@@ -401,6 +419,15 @@ const categoryEditorVisible = ref(false);
 const linkInputText = ref('');
 const linkInputRef = ref(null);
 const annotationRefs = ref({});
+const fullscreenImage = ref(null); // 当前全屏显示的图片 URL
+const fullscreenOverlay = ref(null); // 全屏浮层 DOM 引用
+
+// 全屏浮层出现时自动聚焦（响应 Escape 键盘事件）
+watch(fullscreenImage, (val) => {
+  if (val) {
+    nextTick(() => fullscreenOverlay.value?.focus());
+  }
+});
 
 // Wiki 链接编辑
 function addLink() {
@@ -564,6 +591,28 @@ if (typeof markdownit === 'function') {
     breaks: true
   });
   md.value.use(wikiPlugin);
+
+  // 自定义图片渲染：外包容器 + 放大按钮
+  md.value.renderer.rules.image = (tokens, idx) => {
+    const token = tokens[idx];
+    const src = token.attrGet('src') || '';
+    const alt = token.content || '';
+    const title = token.attrGet('title') || '';
+    const titleAttr = title ? ` title="${title}"` : '';
+    const imgHtml = `<img src="${src}" alt="${alt}"${titleAttr} loading="lazy">`;
+    const escapedSrc = src.replace(/&/g, '&amp;').replace(/"/g, '&quot;').replace(/'/g, '&#39;');
+    return `<div class="img-wrapper">
+      ${imgHtml}
+      <button class="img-zoom-btn" data-img-src="${escapedSrc}" type="button" aria-label="放大图片">
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+          <circle cx="11" cy="11" r="8"/>
+          <line x1="21" y1="21" x2="16.65" y2="16.65"/>
+          <line x1="11" y1="8" x2="11" y2="14"/>
+          <line x1="8" y1="11" x2="14" y2="11"/>
+        </svg>
+      </button>
+    </div>`;
+  };
 }
 
 const panelStyle = computed(() => {
@@ -1370,6 +1419,16 @@ function handleEditorKeydown(e) {
 
 // 预览区点击链接: 阻止默认跳转,改为新窗口打开
 function handlePreviewClick(e) {
+  // 图片放大按钮
+  const btn = e.target.closest('.img-zoom-btn');
+  if (btn) {
+    const src = btn.dataset.imgSrc;
+    if (src) {
+      fullscreenImage.value = src;
+    }
+    return;
+  }
+
   const a = e.target.closest('a');
   if (!a) return;
   // Wiki 链接: 跳转到对应笔记
@@ -1614,6 +1673,37 @@ document.addEventListener('keydown', onKeydown);
   max-width: 100%;
   border-radius: 6px;
   margin: 8px 0;
+  display: block;
+}
+.md-preview :deep(.img-wrapper) {
+  position: relative;
+  display: inline-block;
+  max-width: 100%;
+}
+.md-preview :deep(.img-wrapper:hover .img-zoom-btn) {
+  opacity: 1;
+}
+.md-preview :deep(.img-zoom-btn) {
+  position: absolute;
+  top: 12px;
+  right: 12px;
+  width: 36px;
+  height: 36px;
+  border-radius: 8px;
+  background: rgba(0,0,0,0.55);
+  color: #fff;
+  border: none;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  opacity: 0;
+  transition: opacity 0.2s, background 0.2s;
+  backdrop-filter: blur(4px);
+  -webkit-backdrop-filter: blur(4px);
+}
+.md-preview :deep(.img-zoom-btn:hover) {
+  background: rgba(0,0,0,0.75);
 }
 .md-preview :deep(hr) {
   border: none;
@@ -1709,5 +1799,51 @@ button[aria-label="删除笔记"]:hover {
 }
 .plain-editor:focus {
   border-color: var(--color-accent);
+}
+
+/* ===== Image Fullscreen Overlay ===== */
+.img-fullscreen-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 9999;
+  background: rgba(0, 0, 0, 0.85);
+  backdrop-filter: blur(8px);
+  -webkit-backdrop-filter: blur(8px);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: zoom-out;
+  animation: fadeIn 0.2s ease;
+}
+.img-fullscreen-overlay .img-fullscreen-content {
+  max-width: 90vw;
+  max-height: 90vh;
+  object-fit: contain;
+  border-radius: 8px;
+  box-shadow: 0 8px 40px rgba(0,0,0,0.5);
+  cursor: default;
+}
+.img-fullscreen-overlay .img-fullscreen-close {
+  position: absolute;
+  top: 20px;
+  right: 20px;
+  width: 44px;
+  height: 44px;
+  border-radius: 50%;
+  background: rgba(255,255,255,0.15);
+  color: #fff;
+  border: none;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: background 0.2s;
+}
+.img-fullscreen-overlay .img-fullscreen-close:hover {
+  background: rgba(255,255,255,0.3);
+}
+@keyframes fadeIn {
+  from { opacity: 0; }
+  to { opacity: 1; }
 }
 </style>
