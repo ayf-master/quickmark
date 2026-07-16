@@ -191,6 +191,7 @@ const dragOverNoteId = ref(null);
 function onNoteDragStart(e, id) {
   dragNoteId.value = id;
   e.dataTransfer.effectAllowed = 'move';
+  e.dataTransfer.setData('application/x-quickmark-note', String(id));
 }
 
 function onNoteDragOver(e, id) {

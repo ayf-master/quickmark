@@ -644,6 +644,26 @@ export const store = reactive({
     store.scheduleAutoSave();
   },
 
+  // 拖拽笔记到分类：直接替换笔记的分类
+  async moveNoteToCategory(noteId, catId) {
+    try {
+      await API.updateNote(noteId, { category_ids: [catId] });
+      // 更新本地 store 中的笔记数据
+      const idx = store.notes.findIndex(n => n.id === noteId);
+      if (idx !== -1) {
+        const cat = store.categories.find(c => c.id === catId);
+        store.notes[idx].category_ids = [catId];
+        store.notes[idx].category_names = cat ? [cat.name] : [];
+        store.noteListVersion = Date.now();
+      }
+      store.showToast('分类已变更');
+      store.loadCategories();
+    } catch (err) {
+      console.error('移动笔记失败:', err);
+      store.showToast('分类变更失败', 'error');
+    }
+  },
+
   // ===== Auto-save =====
   scheduleAutoSave() {
     clearTimeout(autoSaveTimer);
