@@ -1927,25 +1927,28 @@ button[aria-label="删除笔记"]:hover {
   width: 48px;
   height: 48px;
   border-radius: 50%;
-  background: rgba(255,255,255,0.12);
+  background: rgba(0,0,0,0.55);
   color: #fff;
-  border: none;
+  border: 1px solid rgba(255,255,255,0.2);
   cursor: pointer;
   display: flex;
   align-items: center;
   justify-content: center;
-  transition: background 0.2s, transform 0.15s;
+  transition: background 0.2s, transform 0.15s, border-color 0.2s;
   z-index: 10;
+  box-shadow: 0 2px 12px rgba(0,0,0,0.3);
 }
 .img-fullscreen-nav:hover {
-  background: rgba(255,255,255,0.25);
+  background: rgba(255,255,255,0.2);
+  border-color: rgba(255,255,255,0.5);
   transform: translateY(-50%) scale(1.1);
+  box-shadow: 0 4px 20px rgba(0,0,0,0.4);
 }
 .img-fullscreen-nav-prev {
-  left: 20px;
+  left: 24px;
 }
 .img-fullscreen-nav-next {
-  right: 20px;
+  right: 24px;
 }
 .img-fullscreen-counter {
   position: absolute;
