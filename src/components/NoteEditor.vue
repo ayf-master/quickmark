@@ -385,17 +385,43 @@
     <Teleport to="body">
       <div v-if="fullscreenImage"
         class="img-fullscreen-overlay"
-        @click.self="fullscreenImage = null"
-        @keydown.escape="fullscreenImage = null"
+        @click.self="closeFullscreen"
+        @keydown.escape="closeFullscreen"
+        @keydown.left="goFullscreenPrev"
+        @keydown.right="goFullscreenNext"
         tabindex="0"
         ref="fullscreenOverlay">
-        <button class="img-fullscreen-close" @click="fullscreenImage = null" aria-label="关闭">
+        <button class="img-fullscreen-close" @click="closeFullscreen" aria-label="关闭">
           <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
             <line x1="18" y1="6" x2="6" y2="18"/>
             <line x1="6" y1="6" x2="18" y2="18"/>
           </svg>
         </button>
+
+        <!-- 上一张 -->
+        <button v-if="fullscreenIndex > 0"
+          class="img-fullscreen-nav img-fullscreen-nav-prev"
+          @click.stop="goFullscreenPrev"
+          aria-label="上一张">
+          <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+            <polyline points="15 18 9 12 15 6"/>
+          </svg>
+        </button>
+
         <img :src="fullscreenImage" class="img-fullscreen-content" alt="全屏图片">
+
+        <!-- 下一张 -->
+        <button v-if="fullscreenIndex < fullscreenImages.length - 1"
+          class="img-fullscreen-nav img-fullscreen-nav-next"
+          @click.stop="goFullscreenNext"
+          aria-label="下一张">
+          <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+            <polyline points="9 18 15 12 9 6"/>
+          </svg>
+        </button>
+
+        <!-- 计数器 -->
+        <div class="img-fullscreen-counter">{{ fullscreenIndex + 1 }} / {{ fullscreenImages.length }}</div>
       </div>
     </Teleport>
   </section>
@@ -419,10 +445,42 @@ const categoryEditorVisible = ref(false);
 const linkInputText = ref('');
 const linkInputRef = ref(null);
 const annotationRefs = ref({});
-const fullscreenImage = ref(null); // 当前全屏显示的图片 URL
-const fullscreenOverlay = ref(null); // 全屏浮层 DOM 引用
+// 图片全屏浏览（支持多张导航）
+const fullscreenImages = ref([]);
+const fullscreenIndex = ref(-1);
+const fullscreenOverlay = ref(null);
+const fullscreenImage = computed(() =>
+  fullscreenIndex.value >= 0 && fullscreenIndex.value < fullscreenImages.value.length
+    ? fullscreenImages.value[fullscreenIndex.value]
+    : null
+);
+function goFullscreenPrev() {
+  if (fullscreenIndex.value > 0) fullscreenIndex.value--;
+}
+function goFullscreenNext() {
+  if (fullscreenIndex.value < fullscreenImages.value.length - 1) fullscreenIndex.value++;
+}
+function closeFullscreen() {
+  fullscreenImages.value = [];
+  fullscreenIndex.value = -1;
+}
+function goFullscreenByIndex(idx) {
+  if (idx >= 0 && idx < fullscreenImages.value.length) fullscreenIndex.value = idx;
+}
+// 从 Markdown 原文提取所有图片 URL
+function extractImageUrls(markdown) {
+  const urls = [];
+  const mdRe = /!\[.*?\]\(([^)]+)\)/g;
+  let m;
+  while ((m = mdRe.exec(markdown)) !== null) urls.push(m[1]);
+  const htmlRe = /<img[^>]+src="([^"]+)"/gi;
+  while ((m = htmlRe.exec(markdown)) !== null) {
+    if (!urls.includes(m[1])) urls.push(m[1]);
+  }
+  return urls;
+}
 
-// 全屏浮层出现时自动聚焦（响应 Escape 键盘事件）
+// 全屏浮层出现时自动聚焦（响应键盘事件）
 watch(fullscreenImage, (val) => {
   if (val) {
     nextTick(() => fullscreenOverlay.value?.focus());
@@ -1424,7 +1482,10 @@ function handlePreviewClick(e) {
   if (img) {
     const src = img.dataset.imgSrc || img.getAttribute('src');
     if (src) {
-      fullscreenImage.value = src;
+      const allImages = extractImageUrls(store.editContent || '');
+      const idx = allImages.indexOf(src);
+      fullscreenImages.value = allImages;
+      fullscreenIndex.value = idx >= 0 ? idx : 0;
     }
     return;
   }
@@ -1856,5 +1917,49 @@ button[aria-label="删除笔记"]:hover {
 @keyframes fadeIn {
   from { opacity: 0; }
   to { opacity: 1; }
+}
+
+/* ===== Fullscreen Navigation ===== */
+.img-fullscreen-nav {
+  position: absolute;
+  top: 50%;
+  transform: translateY(-50%);
+  width: 48px;
+  height: 48px;
+  border-radius: 50%;
+  background: rgba(255,255,255,0.12);
+  color: #fff;
+  border: none;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: background 0.2s, transform 0.15s;
+  z-index: 10;
+}
+.img-fullscreen-nav:hover {
+  background: rgba(255,255,255,0.25);
+  transform: translateY(-50%) scale(1.1);
+}
+.img-fullscreen-nav-prev {
+  left: 20px;
+}
+.img-fullscreen-nav-next {
+  right: 20px;
+}
+.img-fullscreen-counter {
+  position: absolute;
+  bottom: 24px;
+  left: 50%;
+  transform: translateX(-50%);
+  color: rgba(255,255,255,0.6);
+  font-size: 14px;
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  background: rgba(0,0,0,0.4);
+  padding: 4px 14px;
+  border-radius: 20px;
+  backdrop-filter: blur(4px);
+  -webkit-backdrop-filter: blur(4px);
+  user-select: none;
 }
 </style>
