@@ -6,7 +6,7 @@
       @dragover.prevent="onDragOver"
       @drop.prevent="onDrop"
       @dragend="onDragEnd"
-      :class="['w-full text-left px-2 py-1.5 rounded-lg text-sm flex items-center justify-between transition-all mb-0.5 group category-row min-w-0 overflow-hidden', { 'is-selected': store.selectedCategoryId === node.id, 'cat-dragging': dragging, 'cat-drop-here': dropHere, 'note-drop-zone': noteDropOver }]">
+      :class="['w-full text-left px-2 py-1.5 rounded-lg text-sm flex items-center justify-between transition-all mb-0.5 group category-row min-w-0 overflow-hidden', { 'is-selected': store.selectedCategoryId === node.id, 'cat-dragging': dragging, 'cat-drop-here': dropHere }]">
       <span class="flex items-center gap-1.5 min-w-0 flex-1">
         <!-- 展开/折叠箭头 -->
         <button v-if="node.children && node.children.length > 0"
@@ -110,7 +110,6 @@ const emit = defineEmits(['select', 'create-child', 'edit', 'delete', 'toggle-ex
 
 const dragging = ref(false);
 const dropHere = ref(false);
-const noteDropOver = ref(false);
 
 function onDragStart(e) {
   dragging.value = true;
@@ -121,9 +120,8 @@ function onDragStart(e) {
 }
 
 function onDragOver(e) {
-  // Note drag (cross-zone from NoteList)
+  // Note drag (cross-zone from NoteList) — no visual feedback needed, just allow drop
   if (e.dataTransfer.types && e.dataTransfer.types.includes('application/x-quickmark-note')) {
-    noteDropOver.value = true;
     return;
   }
   // Category drag (reorder)
@@ -137,7 +135,6 @@ async function onDrop(e) {
   // Note drop: move note to this category
   const noteId = e.dataTransfer.getData('application/x-quickmark-note');
   if (noteId) {
-    noteDropOver.value = false;
     dragCatId = null;
     await store.moveNoteToCategory(Number(noteId), props.node.id);
     return;
@@ -180,7 +177,6 @@ async function onDrop(e) {
 function onDragEnd() {
   dragging.value = false;
   dropHere.value = false;
-  noteDropOver.value = false;
   dragCatId = null;
   emit('drag-cat-end');
 }
@@ -258,11 +254,5 @@ function onDragEnd() {
   background: var(--color-primary);
   border-radius: 1px;
   opacity: 0.6;
-}
-.note-drop-zone {
-  outline: 2px dashed var(--color-accent) !important;
-  outline-offset: -2px;
-  background: var(--color-accent-subtle) !important;
-  border-radius: 8px;
 }
 </style>
