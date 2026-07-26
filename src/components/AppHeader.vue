@@ -52,6 +52,9 @@
     </div>
 
     <div class="flex items-center gap-1 flex-shrink-0">
+      <!-- 扩展功能 (功能开关面板) -->
+      <FeaturePanel />
+
       <!-- 移动端: 新建笔记快捷按钮 -->
       <button v-if="store.isCompact"
         class="btn btn-icon btn-primary"
@@ -208,6 +211,7 @@
 import { ref, computed, onMounted, onUnmounted } from 'vue';
 import { store } from '@/store';
 import ThemeToggle from '@/components/ThemeToggle.vue';
+import FeaturePanel from '@/components/FeaturePanel.vue';
 
 const isAdmin = computed(() => store.currentUser?.role === 'admin');
 

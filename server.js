@@ -17,6 +17,7 @@ const cookieParser = require('cookie-parser');
 const cache = require('./src/utils/cache');
 const logger = require('./src/utils/logger');
 const helmet = require('helmet');
+const settingsDAL = require('./prisma/settings');
 
 // 加载 .env (本地开发用, 生产环境由进程管理器/systemd 注入环境变量)
 require('dotenv').config();
@@ -123,7 +124,8 @@ const apiLimiter = rateLimit({
 });
 app.use('/api', apiLimiter);
 
-// 阶段 4: 业务 API 鉴权 (除 /api/auth/*, /api/health, /api/upload, /uploads 外都强制登录 + CSRF)
+// 阶段 4: 业务 API 鉴权 (除 /api/auth/*, /api/health 外都强制登录 + CSRF)
+//          /api/upload 也强制鉴权 (防匿名上传), 上传走 multipart 但 CSRF 从 header 读, 不受影响
 //          pool 模式 (USE_PRISMA=0) 不强制鉴权, 保留应急回退
 const authMw = require('./prisma/auth');
 if (USE_PRISMA) {
@@ -131,7 +133,6 @@ if (USE_PRISMA) {
     // 白名单
     if (req.path.startsWith('/auth/')) return next();
     if (req.path === '/health') return next();
-    if (req.path === '/upload') return next();
     // 强制鉴权 + CSRF
     authMw.requireAuth(req, res, (err) => {
       if (err) return;
@@ -232,7 +233,7 @@ const POOL_FALLBACK_USER_ID = 1;
 // ==================== 缓存失效辅助 ====================
 function invalidateNoteCache(userId, noteId) {
   const keys = ['cat_tree:user:' + userId];
-  if (noteId) keys.push('note:' + noteId);
+  if (noteId) keys.push('note:' + userId + ':' + noteId);
   cache.del(...keys).catch(() => {});
 }
 function invalidateCategoryCache(userId) {
@@ -599,6 +600,45 @@ app.patch('/api/categories/reorder', async (req, res) => {
     res.json({ success: true });
   } catch (err) {
     handleApiError(res, err, '分类排序');
+  }
+});
+
+// ==================== 用户设置 (功能开关) ====================
+// 双模式: Prisma 模式走 ORM; pool 模式走 mysql2。两种方式都优雅降级——
+// 列还没迁移时返回默认, 不阻塞前端 (开关在内存中仍可用)。
+app.get('/api/settings', async (req, res) => {
+  try {
+    if (!req.user) return res.status(401).json({ error: '未登录' });
+    if (USE_PRISMA) {
+      const prisma = prismaModule.getPrisma();
+      return res.json(await settingsDAL.getSettings(req.user.id, prisma));
+    }
+    const [rows] = await pool.query('SELECT `settings` FROM `users` WHERE `id` = ?', [req.user.id]);
+    return res.json(settingsDAL.normalizeSettings(rows[0] ? rows[0].settings : null));
+  } catch (err) {
+    logger.warn('getSettings 降级:', err.message);
+    return res.json({ features: {} });
+  }
+});
+
+app.put('/api/settings', async (req, res) => {
+  try {
+    if (!req.user) return res.status(401).json({ error: '未登录' });
+    if (USE_PRISMA) {
+      const prisma = prismaModule.getPrisma();
+      return res.json(await settingsDAL.setSettings(req.user.id, req.body, prisma));
+    }
+    const [rows] = await pool.query('SELECT `settings` FROM `users` WHERE `id` = ?', [req.user.id]);
+    const merged = settingsDAL.mergeSettings(
+      settingsDAL.normalizeSettings(rows[0] ? rows[0].settings : null),
+      req.body
+    );
+    await pool.query('UPDATE `users` SET `settings` = ? WHERE `id` = ?', [JSON.stringify(merged), req.user.id]);
+    return res.json(merged);
+  } catch (err) {
+    logger.warn('setSettings 降级:', err.message);
+    // 列没建: 仅内存合并, 不持久化
+    return res.json(settingsDAL.mergeSettings({ features: {} }, req.body));
   }
 });
 

@@ -256,6 +256,22 @@ const API = {
     const resp = await authedFetch('/api/feedback/' + id, { method: 'DELETE' });
     if (!resp.ok) throw new Error('删除失败');
     return resp.json();
+  },
+
+  // ===== Settings (功能开关) =====
+  async getSettings() {
+    const resp = await authedFetch('/api/settings');
+    if (!resp.ok) throw new Error('获取设置失败');
+    return resp.json();
+  },
+  async updateSettings(settings) {
+    const resp = await authedFetch('/api/settings', {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(settings)
+    });
+    if (!resp.ok) throw new Error('保存设置失败');
+    return resp.json();
   }
 };
 

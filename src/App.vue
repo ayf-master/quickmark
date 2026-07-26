@@ -71,6 +71,7 @@ import FeedbackDialog from '@/components/FeedbackDialog.vue';
 import FeedbackAdmin from '@/components/FeedbackAdmin.vue';
 import KnowledgeGraph from '@/components/KnowledgeGraph.vue';
 import API from '@/api/index.js';
+import { initFeatures, resetFeatures } from '@/store/features.js';
 
 const authChecked = ref(false);
 const loggedIn = ref(false);
@@ -100,6 +101,7 @@ async function onLoginSuccess(user) {
   }
   await store.loadAll();
   store.initOnboarding();
+  await initFeatures(); // 拉取功能开关状态
 }
 
 async function onLogout() {
@@ -111,6 +113,7 @@ async function onLogout() {
   }
   // 清前端状态
   store.currentUser = null;
+  resetFeatures(); // 清空功能开关, 避免下一个用户看到上一个用户的
   store.notes = [];
   store.categories = [];
   store.editingNote = null;

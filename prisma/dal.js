@@ -85,16 +85,38 @@ async function getCategoryNoteCounts(rootIds, prisma) {
   return result;
 }
 
+/** 全文检索笔记 id (notes.title + notes.content, 需 ngram 解析器的 FULLTEXT 索引才生效)
+ *  返回命中 id 列表; 若索引缺失/语法异常, 自动降级为 LIKE, 保证搜索始终可用 */
+async function searchNoteIds(userId, search, prisma) {
+  const terms = search.trim().split(/\s+/).filter(Boolean).map(t => '+' + t + '*').join(' ');
+  if (!terms) return [];
+  try {
+    const rows = await prisma.$queryRaw`
+      SELECT n.id FROM notes n
+      WHERE n.user_id = ${userId}
+        AND MATCH(n.title, n.content) AGAINST (${terms} IN BOOLEAN MODE)
+    `;
+    return rows.map(r => r.id);
+  } catch (e) {
+    logger.warn('FULLTEXT 搜索不可用, 降级 LIKE:', e.message);
+    const notes = await prisma.note.findMany({
+      where: { userId, OR: [{ title: { contains: search } }, { content: { contains: search } }] },
+      select: { id: true }
+    });
+    return notes.map(n => n.id);
+  }
+}
+
 // ==================== 笔记 (Note) ====================
 
 /** GET /api/notes — 笔记列表 (支持 search / category_id / pinned) */
 async function listNotes(userId, { search, category_id, pinned }, prisma) {
   const where = { userId };  // 阶段 4: 多用户隔离
   if (search) {
-    where.OR = [
-      { title: { contains: search } },
-      { content: { contains: search } }
-    ];
+    // 走 FULLTEXT + ngram 索引做中文全文检索, 失败自动降级 LIKE
+    const ids = await searchNoteIds(userId, search, prisma);
+    if (ids.length === 0) return [];
+    where.id = { in: ids };
   }
   if (pinned === 'true' || pinned === true) {
     where.isPinned = true;
@@ -119,10 +141,12 @@ async function listNotes(userId, { search, category_id, pinned }, prisma) {
   return rows.map(formatNote);
 }
 
-/** GET /api/notes/:id — 单条笔记 (鉴权后只能看自己) */
+/** GET /api/notes/:id — 单条笔记 (鉴权后只能看自己)
+ *  缓存 key 必须含 userId: 否则越权访问缓存的 null 会让真主人拿到 404 */
 async function getNote(userId, id, prisma) {
   const noteId = parseInt(id);
-  return cache.wrap('note:' + noteId, 600, async () => {
+  const cacheKey = 'note:' + userId + ':' + noteId;
+  return cache.wrap(cacheKey, 600, async () => {
     const note = await prisma.note.findUnique({
       where: { id: noteId },
       include: { categories: { include: { category: true } } }

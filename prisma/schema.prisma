@@ -62,7 +62,8 @@ model Note {
   categories NoteCategory[]
 
   @@index([userId], name: "idx_user_id")
-  // FULLTEXT 索引 (title, content) — Prisma 不直接支持 FT, 用原生 SQL 迁移补
+  // FULLTEXT 索引 (title, content) 经 ngram 解析器支持中文, 由迁移
+  // prisma/migrations/20260725000000_fulltext_ngram/migration.sql 创建 (Prisma 不直接支持 FT)
   @@map("notes")
 }
 
@@ -90,6 +91,7 @@ model User {
   displayName  String?  @map("display_name") @db.VarChar(100)
   role         String   @default("user") @db.VarChar(20) // "admin" / "user"
   isLocked     Boolean  @default(false) @map("is_locked")
+  settings     Json?    @map("settings") // 用户偏好 / 功能开关, 如 { features: { spacedRepetition: true } }
   createdAt    DateTime @default(now()) @map("created_at")
   updatedAt    DateTime @default(now()) @updatedAt @map("updated_at")
 
