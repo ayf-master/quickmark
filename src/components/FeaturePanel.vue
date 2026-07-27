@@ -11,6 +11,7 @@
         <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.066 2.573c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.573 1.066c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.066-2.573c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z"/>
         <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"/>
       </svg>
+      <span v-if="pending > 0" class="badge">{{ pending > 99 ? '99+' : pending }}</span>
     </button>
 
     <!-- 下拉面板 -->
@@ -61,10 +62,11 @@
 </template>
 
 <script setup>
-import { ref, shallowRef, onMounted, onUnmounted } from 'vue';
+import { ref, shallowRef, onMounted, onUnmounted, watch } from 'vue';
 import { defineAsyncComponent } from 'vue';
 import { features, setFeature } from '@/store/features.js';
 import { featuresManifest } from '@/featureManifest.js';
+import API from '@/api/index.js';
 
 const manifest = featuresManifest;
 const open = ref(false);
@@ -72,9 +74,21 @@ const rootRef = ref(null);
 const activeComp = shallowRef(null);
 const activeTitle = ref('');
 const activeDesc = ref('');
+const pending = ref(0);  // 间隔重复待复习数 (齿轮角标)
+
+async function refreshPending() {
+  if (!features.spacedRepetition) { pending.value = 0; return; }
+  try {
+    const d = await API.getReviewQueue();
+    pending.value = (d.today || []).length;
+  } catch (e) { /* 功能关 / 未就绪时不显示角标 */ }
+}
 
 function toggle(f) {
-  setFeature(f.id, !features[f.id]);
+  const next = !features[f.id];
+  setFeature(f.id, next);
+  // 开启后自动弹出抽屉 (丝滑: 拨开关即见功能), 等下拉面板收起再开
+  if (next) setTimeout(() => openFeature(f), 220);
 }
 
 function openFeature(f) {
@@ -83,6 +97,7 @@ function openFeature(f) {
   // loader 是 () => import(...), defineAsyncComponent 会触发分包懒加载
   activeComp.value = defineAsyncComponent(f.loader);
   open.value = false;
+  if (f.id === 'spacedRepetition') refreshPending();
 }
 
 function closeFeature() {
@@ -94,8 +109,10 @@ function onClickOutside(e) {
     open.value = false;
   }
 }
-onMounted(() => document.addEventListener('click', onClickOutside));
+onMounted(() => { document.addEventListener('click', onClickOutside); refreshPending(); });
 onUnmounted(() => document.removeEventListener('click', onClickOutside));
+// 开关变化即时同步角标
+watch(() => features.spacedRepetition, () => refreshPending());
 </script>
 
 <style scoped>
@@ -110,6 +127,14 @@ onUnmounted(() => document.removeEventListener('click', onClickOutside));
   border-radius: 50%; background: #fff; transition: transform .2s;
 }
 .toggle.on .knob { transform: translateX(16px); }
+
+.badge {
+  position: absolute; top: -4px; right: -4px;
+  min-width: 16px; height: 16px; padding: 0 4px;
+  border-radius: 999px; background: #ef4444; color: #fff;
+  font-size: 10px; font-weight: 700; line-height: 16px; text-align: center;
+  border: 2px solid var(--bg-elevated);
+}
 
 .feature-drawer {
   position: fixed; top: 0; right: 0; height: 100vh; width: 380px; max-width: 90vw;

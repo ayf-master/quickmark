@@ -4,13 +4,14 @@
 // Phase 0 三个功能共用 FeaturePlaceholder 占位; Phase 1 起把 spacedRepetition.loader
 // 换成真正的 ReviewQueue.vue 即可, 其余不动。
 const placeholder = () => import('@/components/FeaturePlaceholder.vue');
+const reviewQueue = () => import('@/components/ReviewQueue.vue');
 
 export const featuresManifest = [
   {
     id: 'spacedRepetition',
     title: '间隔重复',
     desc: '把笔记变成能复习的学习引擎，支持 [[quiz:问题|答案]] 自测卡与掌握度追踪。',
-    loader: placeholder
+    loader: reviewQueue
   },
   {
     id: 'canvas',
