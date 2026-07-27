@@ -122,4 +122,20 @@ async function gradeCardId(userId, cardId, quality, prisma) {
   return { card: updated, mastery, streak };
 }
 
-module.exports = { parseQuizzes, enrollNote, getTodayQueue, gradeCardId };
+// 复习统计: 今日待复习 / 总卡数 / 已掌握数(mastery>=4) / 连续打卡
+async function getStats(userId, prisma) {
+  const [due, total, mastered, user] = await Promise.all([
+    prisma.reviewCard.count({ where: { userId, dueDate: { lte: endOfToday() } } }),
+    prisma.reviewCard.count({ where: { userId } }),
+    prisma.note.count({ where: { userId, mastery: { gte: 4 } } }),
+    prisma.user.findUnique({ where: { id: userId }, select: { reviewStreak: true } })
+  ]);
+  return {
+    dueToday: due,
+    totalCards: total,
+    masteredCount: mastered,
+    streak: user?.reviewStreak || 0
+  };
+}
+
+module.exports = { parseQuizzes, enrollNote, getTodayQueue, gradeCardId, getStats };
