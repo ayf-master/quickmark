@@ -68,6 +68,21 @@ async function enrollNote(userId, noteId, prisma) {
   return { card, created: true };
 }
 
+// 批量注册: 扫描用户所有含 [[quiz]] 的笔记, 建复习卡 (供「今日为空自动点亮旧笔记」)
+async function enrollAll(userId, prisma) {
+  const notes = await prisma.note.findMany({
+    where: { userId },
+    select: { id: true, content: true }
+  });
+  let created = 0;
+  for (const n of notes) {
+    if (parseQuizzes(n.content).length === 0) continue;
+    const r = await enrollNote(userId, n.id, prisma);
+    if (r.created) created += 1;
+  }
+  return { created };
+}
+
 // 今日队列: dueDate <= 今天结束 的卡, 带笔记标题 + 解析出的 quiz
 async function getTodayQueue(userId, prisma) {
   const cards = await prisma.reviewCard.findMany({
@@ -138,4 +153,4 @@ async function getStats(userId, prisma) {
   };
 }
 
-module.exports = { parseQuizzes, enrollNote, getTodayQueue, gradeCardId, getStats };
+module.exports = { parseQuizzes, enrollNote, enrollAll, getTodayQueue, gradeCardId, getStats };
