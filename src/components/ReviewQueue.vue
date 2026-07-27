@@ -1,5 +1,13 @@
 <template>
   <div class="review-q" v-if="!loading && !error">
+    <!-- 复习统计条 -->
+    <div v-if="stats" class="stats-bar">
+      <div class="stat"><span class="stat-num">🔥 {{ stats.streak }}</span><span class="stat-label">连续天</span></div>
+      <div class="stat"><span class="stat-num">{{ stats.dueToday }}</span><span class="stat-label">待复习</span></div>
+      <div class="stat"><span class="stat-num">{{ stats.totalCards }}</span><span class="stat-label">复习卡</span></div>
+      <div class="stat"><span class="stat-num">{{ stats.masteredCount }}</span><span class="stat-label">已掌握</span></div>
+    </div>
+
     <!-- 空状态: 没有任何 [[quiz]] 笔记 -->
     <div v-if="queue.length === 0" class="empty">
       <div class="empty-emoji">📭</div>
@@ -67,6 +75,7 @@ defineProps({ title: String, desc: String });
 
 const loading = ref(true);
 const error = ref('');
+const stats = ref(null);    // 复习统计: streak / dueToday / totalCards / masteredCount
 const queue = ref([]);      // [{ cardId, noteId, title, q, a, mastery }]
 const idx = ref(0);
 const revealed = ref(false);
@@ -104,7 +113,13 @@ async function load() {
   loading.value = true;
   error.value = '';
   try {
-    let data = await API.getReviewQueue();
+    // 并行取统计 + 今日队列
+    const [statsData, queueData] = await Promise.all([
+      API.getReviewStats().catch(() => null),
+      API.getReviewQueue()
+    ]);
+    stats.value = statsData;
+    let data = queueData;
     // 今日为空时, 先扫描注册旧笔记里的 [[quiz]], 再取一次
     if (!data.today || data.today.length === 0) {
       await API.enrollReview();
@@ -133,6 +148,10 @@ load();
 
 <style scoped>
 .review-q { padding: 4px 2px; }
+.stats-bar { display: flex; gap: 6px; margin-bottom: 16px; }
+.stat { flex: 1; background: var(--bg-panel); border: 1px solid var(--border-default); border-radius: 10px; padding: 8px 6px; text-align: center; }
+.stat-num { display: block; font-size: 16px; font-weight: 700; color: var(--text-primary); }
+.stat-label { font-size: 11px; color: var(--text-tertiary); }
 .empty, .done { text-align: center; padding: 32px 12px; }
 .empty-emoji { font-size: 40px; margin-bottom: 8px; }
 .empty-title { font-weight: 600; color: var(--text-primary); margin: 0 0 6px; }

@@ -296,6 +296,12 @@ const API = {
     });
     if (!resp.ok) throw new Error('评分失败');
     return resp.json();
+  },
+  async getReviewStats() {
+    // 复习统计: { dueToday, totalCards, masteredCount, streak }
+    const resp = await authedFetch('/api/review/stats');
+    if (!resp.ok) throw new Error('获取复习统计失败');
+    return resp.json();
   }
 };
 
