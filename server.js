@@ -141,6 +141,12 @@ if (USE_PRISMA) {
   });
 }
 
+// 间隔重复学习系统: 注册在全局鉴权之后, 自动吃 requireAuth + CSRF
+// 仅 Prisma 模式提供 (依赖 review_cards 表 + User.settings 列)
+if (USE_PRISMA) {
+  app.use('/api/review', require('./prisma/routes-review'));
+}
+
 // 生产模式: 优先服务 Vite 构建产物 (dist/)
 const distDir = path.join(__dirname, "dist");
 if (fs.existsSync(distDir)) {
