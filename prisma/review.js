@@ -25,6 +25,36 @@ function endOfToday() {
   return d;
 }
 
+// 本地日期字符串 YYYY-MM-DD (用本地时区, 避免 UTC 偏移导致跨天误判)
+function dateToStr(d) {
+  const m = String(d.getMonth() + 1).padStart(2, '0');
+  const day = String(d.getDate()).padStart(2, '0');
+  return `${d.getFullYear()}-${m}-${day}`;
+}
+
+// 连续打卡 streak: 今天已复习则不变; 昨天复习过 +1; 否则重置为 1
+// 放 User 表维度 (不放 settings), 评分成功时调用
+async function bumpStreak(userId, prisma) {
+  const user = await prisma.user.findUnique({
+    where: { id: userId },
+    select: { reviewStreak: true, lastReviewDate: true }
+  });
+  const today = dateToStr(new Date());
+  const prev = user && user.lastReviewDate ? dateToStr(user.lastReviewDate) : null;
+  let streak = user?.reviewStreak || 0;
+  if (prev !== today) {
+    const y = new Date();
+    y.setDate(y.getDate() - 1);
+    const yStr = dateToStr(y);
+    streak = prev === yStr ? streak + 1 : 1;
+  }
+  await prisma.user.update({
+    where: { id: userId },
+    data: { reviewStreak: streak, lastReviewDate: new Date() }
+  });
+  return streak;
+}
+
 // 加入复习: 为某篇笔记建一张 ReviewCard (已有则忽略)
 async function enrollNote(userId, noteId, prisma) {
   const nid = parseInt(noteId);
@@ -86,7 +116,10 @@ async function gradeCardId(userId, cardId, quality, prisma) {
   const mastery = Math.max(0, Math.min(5, res.reps + (res.interval >= 15 ? 1 : 0)));
   await prisma.note.update({ where: { id: card.noteId }, data: { mastery } });
 
-  return { card: updated, mastery };
+  // 连续打卡 streak (用户维度)
+  const streak = await bumpStreak(userId, prisma);
+
+  return { card: updated, mastery, streak };
 }
 
 module.exports = { parseQuizzes, enrollNote, getTodayQueue, gradeCardId };
