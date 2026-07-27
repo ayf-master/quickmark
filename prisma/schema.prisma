@@ -96,6 +96,8 @@ model User {
   role         String   @default("user") @db.VarChar(20) // "admin" / "user"
   isLocked     Boolean  @default(false) @map("is_locked")
   settings     Json?    @map("settings") // 用户偏好 / 功能开关, 如 { features: { spacedRepetition: true } }
+  reviewStreak Int      @default(0) @map("review_streak")     // 连续复习打卡天数
+  lastReviewDate DateTime? @map("last_review_date")           // 最近一次复习日期(本地日), 用于 streak
   createdAt    DateTime @default(now()) @map("created_at")
   updatedAt    DateTime @default(now()) @updatedAt @map("updated_at")
 

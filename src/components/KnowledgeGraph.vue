@@ -33,6 +33,7 @@
             :style="{ left: tooltipX + 'px', top: tooltipY + 'px' }">
             <div class="tooltip-title">{{ tooltipTitle }}</div>
             <div class="tooltip-stats">入链 {{ tooltipIn }} · 出链 {{ tooltipOut }}</div>
+            <div v-if="tooltipMastery > 0" class="tooltip-stats">掌握度 {{ tooltipMastery }}/5</div>
           </div>
           <div v-if="!hasGraphData" class="graph-empty">
             <p>还没有双向链接</p>
@@ -51,6 +52,7 @@
 <script setup>
 import { ref, computed, watch, onBeforeUnmount, nextTick } from 'vue';
 import { store } from '@/store';
+import { features } from '@/store/features.js';
 import {
   forceSimulation, forceLink, forceManyBody,
   forceCenter, forceCollide
@@ -71,6 +73,16 @@ const tooltipIn = ref(0);
 const tooltipOut = ref(0);
 
 let simulation = null;
+
+// 掌握度着色: 仅当「间隔重复」功能开启时按 mastery 着色, 否则保持主题色 (不干扰核心功能)
+// mastery 0 = 主题色(未掌握); 1-5 = 红(0度) → 绿(120度) 渐变, 一眼看出哪块还没掌握
+function masteryColor(m) {
+  if (!features.spacedRepetition) return 'var(--color-primary)';
+  const v = Number(m) || 0;
+  if (v <= 0) return 'var(--color-primary)';
+  const hue = Math.round((v / 5) * 120);
+  return `hsl(${hue}, 62%, 48%)`;
+}
 
 // 过滤后的图数据
 const filteredData = computed(() => {
@@ -202,12 +214,13 @@ function initSimulation() {
       })
     );
 
-  // 圆
+  // 圆 — 按掌握度着色 (开启间隔重复时)
   node.append('circle')
     .attr('r', d => Math.max(6, Math.min(22, 4 + (d.totalCount || 0) * 3)))
-    .attr('fill', 'var(--color-primary)')
-    .attr('fill-opacity', 0.8)
-    .attr('stroke', 'var(--color-primary-border)')
+    .attr('fill', d => masteryColor(d.mastery))
+    .attr('fill-opacity', 0.82)
+    .attr('stroke', d => masteryColor(d.mastery))
+    .attr('stroke-opacity', 0.95)
     .attr('stroke-width', 1.5)
     .style('cursor', 'pointer');
 
@@ -236,12 +249,14 @@ function initSimulation() {
     tooltipTitle.value = d.title;
     tooltipIn.value = d.inCount || 0;
     tooltipOut.value = d.outCount || 0;
+    tooltipMastery.value = features.spacedRepetition ? (d.mastery || 0) : 0;
     tooltipX.value = event.offsetX + 12;
     tooltipY.value = event.offsetY - 8;
     tooltipVisible.value = true;
   });
   node.on('mouseleave', () => {
     tooltipVisible.value = false;
+    tooltipMastery.value = 0;
   });
 
   // 力模拟

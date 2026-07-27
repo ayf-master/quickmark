@@ -75,4 +75,16 @@ router.post('/:cardId/grade', requireFeature, async (req, res) => {
   }
 });
 
+// ==================== GET /api/review/stats ====================
+router.get('/stats', requireFeature, async (req, res) => {
+  try {
+    const prisma = req.app.locals.prisma;
+    const stats = await review.getStats(req.user.id, prisma);
+    res.json(stats);
+  } catch (e) {
+    console.error(e);
+    res.status(500).json({ error: '服务器错误' });
+  }
+});
+
 module.exports = router;
