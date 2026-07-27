@@ -52,6 +52,8 @@ model Note {
   isPinned  Boolean  @default(false) @map("is_pinned")
   position  Int      @default(0) @map("position")
   userId    Int      @map("user_id")
+  // 掌握度 0-5 (间隔重复功能用, 驱动知识图谱着色); 功能关闭时恒为 0/NULL, 不影响其他逻辑
+  mastery   Int?     @default(0) @map("mastery")
   createdAt DateTime @default(now()) @map("created_at")
   updatedAt DateTime @default(now()) @updatedAt @map("updated_at")
 
@@ -60,6 +62,8 @@ model Note {
 
   // 反向关联: 笔记挂哪些分类
   categories NoteCategory[]
+  // 反向关联: 笔记对应的复习卡 (间隔重复功能, 笔记级粒度)
+  reviewCards ReviewCard[]
 
   @@index([userId], name: "idx_user_id")
   // FULLTEXT 索引 (title, content) 经 ngram 解析器支持中文, 由迁移
@@ -98,6 +102,7 @@ model User {
   notes      Note[]
   categories Category[]
   feedbacks  Feedback[]
+  reviewCards ReviewCard[]
 
   @@map("users")
 }
@@ -113,4 +118,25 @@ model Feedback {
   owner User? @relation(fields: [userId], references: [id], onDelete: SetNull)
 
   @@map("feedback")
+}
+
+// ===== 复习卡表 (间隔重复学习系统) =====
+// 一张笔记 = 一张卡 (笔记级粒度); [[quiz]] 题目从 Note.content 实时解析, 不单独存表
+model ReviewCard {
+  id             Int       @id @default(autoincrement())
+  noteId         Int       @map("note_id")
+  userId         Int       @map("user_id")
+  dueDate        DateTime  @map("due_date")              // 哪天该复习 (按日期比较, 不看时分)
+  interval       Int       @default(0) @map("interval")  // 当前间隔(天)
+  easeFactor     Float     @default(2.5) @map("ease_factor")
+  reps           Int       @default(0) @map("reps")       // 连续答对次数
+  lastReviewedAt DateTime? @map("last_reviewed_at")
+  createdAt      DateTime  @default(now()) @map("created_at")
+  updatedAt      DateTime  @default(now()) @updatedAt @map("updated_at")
+
+  note Note @relation(fields: [noteId], references: [id], onDelete: Cascade)
+  owner User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId, dueDate], name: "idx_user_due") // "今日队列" 高频查询
+  @@map("review_cards")
 }
