@@ -46,6 +46,19 @@ router.post('/enroll/:noteId', requireFeature, async (req, res) => {
   }
 });
 
+// ==================== POST /api/review/enroll-all ====================
+// 批量注册: 扫描用户所有含 [[quiz]] 的笔记, 建复习卡
+router.post('/enroll-all', requireFeature, async (req, res) => {
+  try {
+    const prisma = req.app.locals.prisma;
+    const r = await review.enrollAll(req.user.id, prisma);
+    res.json({ ok: true, created: r.created });
+  } catch (e) {
+    console.error(e);
+    res.status(500).json({ error: '服务器错误' });
+  }
+});
+
 // ==================== GET /api/review/today ====================
 router.get('/today', requireFeature, async (req, res) => {
   try {
