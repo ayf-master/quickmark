@@ -175,6 +175,7 @@ export function buildGraphData(notes, linkIndex) {
   const nodes = notes.map(n => ({
     id: n.id,
     title: n.title,
+    mastery: n.mastery ?? 0,   // 0-5, 由 ReviewQueue 评分写入 Note.mastery
     outCount: outDeg[n.id] || 0,
     inCount: inDeg[n.id] || 0,
     totalCount: (outDeg[n.id] || 0) + (inDeg[n.id] || 0)

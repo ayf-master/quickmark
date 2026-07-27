@@ -419,6 +419,7 @@ function formatNote(note) {
     position: note.position || 0,
     created_at: note.createdAt,
     updated_at: note.updatedAt,
+    mastery: note.mastery ?? 0,   // 0-5, 复习越熟越高, 驱动知识图谱着色
     category_ids: ids,
     category_names: names ? names.split(',') : []
   };
