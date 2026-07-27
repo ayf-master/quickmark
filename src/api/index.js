@@ -276,8 +276,8 @@ const API = {
 
   // ===== 间隔重复 (Spaced Repetition) =====
   async enrollReview() {
-    // 扫描全部笔记, 把含 [[quiz]] 的注册成复习卡
-    const resp = await authedFetch('/api/review/enroll', { method: 'POST' });
+    // 批量注册: 扫描全部含 [[quiz]] 的笔记, 建复习卡
+    const resp = await authedFetch('/api/review/enroll-all', { method: 'POST' });
     if (!resp.ok) throw new Error('注册复习卡失败');
     return resp.json();
   },
@@ -289,10 +289,10 @@ const API = {
   },
   async gradeReview(cardId, quality) {
     // quality: 0-5 (Again/Hard/Good/Easy 映射到 0/3/4/5)
-    const resp = await authedFetch('/api/review/grade', {
+    const resp = await authedFetch('/api/review/' + cardId + '/grade', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ cardId, quality })
+      body: JSON.stringify({ quality })
     });
     if (!resp.ok) throw new Error('评分失败');
     return resp.json();
