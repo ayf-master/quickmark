@@ -272,6 +272,30 @@ const API = {
     });
     if (!resp.ok) throw new Error('保存设置失败');
     return resp.json();
+  },
+
+  // ===== 间隔重复 (Spaced Repetition) =====
+  async enrollReview() {
+    // 扫描全部笔记, 把含 [[quiz]] 的注册成复习卡
+    const resp = await authedFetch('/api/review/enroll', { method: 'POST' });
+    if (!resp.ok) throw new Error('注册复习卡失败');
+    return resp.json();
+  },
+  async getReviewQueue() {
+    // 返回今日待复习队列 { today: [{cardId,noteId,title,q,a,dueDate}], mastery:{...} }
+    const resp = await authedFetch('/api/review/today');
+    if (!resp.ok) throw new Error('获取复习队列失败');
+    return resp.json();
+  },
+  async gradeReview(cardId, quality) {
+    // quality: 0-5 (Again/Hard/Good/Easy 映射到 0/3/4/5)
+    const resp = await authedFetch('/api/review/grade', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ cardId, quality })
+    });
+    if (!resp.ok) throw new Error('评分失败');
+    return resp.json();
   }
 };
 
