@@ -13,7 +13,7 @@
       </div>
 
       <!-- Tab 切换 -->
-      <div v-if="allowRegister" class="tab-bar">
+      <div v-if="allowRegister && (mode === 'login' || mode === 'register')" class="tab-bar">
         <button type="button" @click="mode = 'login'"
           class="tab-btn"
           :class="{ active: mode === 'login' }">
@@ -31,8 +31,14 @@
         {{ errorMsg }}
       </div>
 
+      <!-- 成功/中性提示 -->
+      <div v-if="infoMsg" class="info-msg">
+        {{ infoMsg }}
+
+      </div>
+
       <!-- 表单 -->
-      <form @submit.prevent="onSubmit">
+      <form v-if="mode === 'login' || mode === 'register'" @submit.prevent="onSubmit">
         <div class="field">
           <label for="login-username">用户名</label>
           <input id="login-username" type="text" v-model="username"
@@ -42,6 +48,18 @@
             class="input-field"
             placeholder="请输入用户名"
             required minlength="3" maxlength="32"
+            @keydown.enter.prevent="emailInput?.focus()" />
+        </div>
+
+        <div v-if="mode === 'register'" class="field">
+          <label for="login-email">邮箱 <span class="req">*</span></label>
+          <input id="login-email" type="email" v-model="email"
+            autocomplete="email"
+            ref="emailInput"
+            :disabled="loading"
+            class="input-field"
+            placeholder="用于找回密码"
+            required
             @keydown.enter.prevent="passwordInput?.focus()" />
         </div>
 
@@ -78,10 +96,64 @@
 
         <button type="submit"
           class="submit-btn"
-          :disabled="loading || !username || !password || (mode === 'register' && !password2)">
+          :disabled="loading || !username || !password || (mode === 'register' && (!email || !password2))">
           <span v-if="loading">{{ mode === 'register' ? '注册中...' : '登录中...' }}</span>
           <span v-else>{{ mode === 'register' ? '注册并登录' : '登录' }}</span>
         </button>
+
+        <p v-if="mode === 'login'" class="forgot-link">
+          <button type="button" class="link-btn" @click="mode = 'forgot'">忘记密码？</button>
+        </p>
+      </form>
+
+      <!-- 找回密码: 发验证码 → 填码重置 -->
+      <form v-if="mode === 'forgot' && !codeSent" @submit.prevent="onForgot">
+        <div class="field">
+          <label for="forgot-email">注册邮箱</label>
+          <input id="forgot-email" type="email" v-model="resetEmail"
+            autocomplete="email" :disabled="loading"
+            class="input-field" placeholder="请输入你的注册邮箱" required />
+        </div>
+        <button type="submit" class="submit-btn" :disabled="loading || !resetEmail">
+          <span v-if="loading">发送中...</span>
+          <span v-else>发送验证码</span>
+        </button>
+        <p class="forgot-link">
+          <button type="button" class="link-btn" @click="backToLogin">返回登录</button>
+        </p>
+      </form>
+
+      <!-- 验证码已发送: 输入验证码 + 新密码 -->
+      <form v-else-if="mode === 'forgot' && codeSent" @submit.prevent="onReset">
+        <div class="field">
+          <label for="reset-code">验证码</label>
+          <input id="reset-code" type="text" v-model="resetCode"
+            class="input-field" placeholder="6 位验证码" required
+            maxlength="6" style="font-size:20px;letter-spacing:6px;text-align:center;" />
+        </div>
+        <div class="field">
+          <label for="reset-password">新密码</label>
+          <input id="reset-password" type="password" v-model="newPassword"
+            autocomplete="new-password" :disabled="loading"
+            class="input-field" placeholder="至少 6 位" required minlength="6" />
+        </div>
+        <div class="field">
+          <label for="reset-password2">确认新密码</label>
+          <input id="reset-password2" type="password" v-model="newPassword2"
+            autocomplete="new-password" :disabled="loading"
+            class="input-field" placeholder="再输一次" required minlength="6" />
+        </div>
+        <button type="submit" class="submit-btn" :disabled="loading || !resetCode || !newPassword || !newPassword2">
+          <span v-if="loading">重置中...</span>
+          <span v-else>重置密码</span>
+        </button>
+        <p class="forgot-link">
+          <button type="button" class="link-btn" @click="onForgot" :disabled="countdown > 0">
+            {{ countdown > 0 ? countdown + 's 后可重新发送' : '重新发送验证码' }}
+          </button>
+          ｜
+          <button type="button" class="link-btn" @click="backToLogin">返回登录</button>
+        </p>
       </form>
 
       <p v-if="mode === 'register'" class="register-hint">
@@ -111,26 +183,108 @@ const emit = defineEmits(['success']);
 // (生产环境应改为后端返回的配置接口, 阶段 8 简化为本地判断)
 const allowRegister = ref(true);
 
-const mode = ref('login'); // 'login' | 'register'
+const mode = ref('login'); // 'login' | 'register' | 'forgot' | 'reset'
 const username = ref('');
+const email = ref('');
 const displayName = ref('');
 const password = ref('');
 const password2 = ref('');
 const loading = ref(false);
 const errorMsg = ref(props.initialError);
+const infoMsg = ref('');      // 中性/成功提示 (绿色)
+const devResetUrl = ref('');  // 开发模式: 后端回传的重置链接
 const usernameInput = ref(null);
+const emailInput = ref(null);
 const passwordInput = ref(null);
+// 找回/重置密码相关 (验证码模式)
+const resetEmail = ref('');
+const resetCode = ref('');
+const codeSent = ref(false);
+const countdown = ref(0);
+let countdownTimer = null;
+const newPassword = ref('');
+const newPassword2 = ref('');
 
 onMounted(() => {
   usernameInput.value?.focus();
 });
 
-// 切换 mode 时清空错误 + 密码
+// 切换 mode 时清空所有字段 + 提示
 watch(mode, () => {
   errorMsg.value = '';
+  infoMsg.value = '';
+  devResetUrl.value = '';
+  username.value = '';
+  email.value = '';
   password.value = '';
   password2.value = '';
+  resetEmail.value = '';
+  resetCode.value = '';
+  codeSent.value = false;
+  newPassword.value = '';
+  newPassword2.value = '';
+  if (countdownTimer) { clearInterval(countdownTimer); countdownTimer = null; }
 });
+
+// 找回密码: 发送验证码
+async function onForgot() {
+  if (loading.value) return;
+  errorMsg.value = '';
+  infoMsg.value = '';
+  codeSent.value = false;
+  loading.value = true;
+  try {
+    const data = await API.forgotPassword(resetEmail.value.trim());
+    infoMsg.value = data.message || '验证码已发送到邮箱';
+    codeSent.value = true;
+    // 开发模式辅助填入验证码
+    if (data.devCode) resetCode.value = data.devCode;
+    countdown.value = 60;
+    if (countdownTimer) clearInterval(countdownTimer);
+    countdownTimer = setInterval(() => {
+      countdown.value--;
+      if (countdown.value <= 0) { clearInterval(countdownTimer); countdownTimer = null; }
+    }, 1000);
+  } catch (err) {
+    errorMsg.value = err.message || '请求失败';
+  } finally {
+    loading.value = false;
+  }
+}
+
+// 重置密码: 用验证码 + 新密码
+async function onReset() {
+  if (loading.value) return;
+  errorMsg.value = '';
+  infoMsg.value = '';
+  if ((resetCode.value + '').length !== 6) {
+    errorMsg.value = '请输入 6 位验证码';
+    return;
+  }
+  if (newPassword.value.length < 6) {
+    errorMsg.value = '密码至少 6 位';
+    return;
+  }
+  if (newPassword.value !== newPassword2.value) {
+    errorMsg.value = '两次密码输入不一致';
+    return;
+  }
+  loading.value = true;
+  try {
+    const data = await API.resetPassword(resetEmail.value.trim(), resetCode.value.trim(), newPassword.value);
+    infoMsg.value = data.message || '密码已重置，请用新密码登录';
+    setTimeout(() => backToLogin(), 1200);
+  } catch (err) {
+    errorMsg.value = err.message || '重置失败';
+  } finally {
+    loading.value = false;
+  }
+}
+
+// 回到登录
+function backToLogin() {
+  mode.value = 'login';
+}
 
 async function onSubmit() {
   if (loading.value) return;
@@ -138,6 +292,14 @@ async function onSubmit() {
 
   // 注册前置校验
   if (mode.value === 'register') {
+    if (!email.value.trim()) {
+      errorMsg.value = '邮箱必填, 用于找回密码';
+      return;
+    }
+    if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email.value.trim())) {
+      errorMsg.value = '邮箱格式不正确';
+      return;
+    }
     if (password.value.length < 6) {
       errorMsg.value = '密码至少 6 位';
       return;
@@ -153,6 +315,7 @@ async function onSubmit() {
     if (mode.value === 'register') {
       await API.register({
         username: username.value.trim(),
+        email: email.value.trim(),
         password: password.value,
         displayName: displayName.value.trim() || undefined
       });
@@ -299,6 +462,42 @@ async function onSubmit() {
   border: 1px solid currentColor;
 }
 
+/* ===== Info / success message ===== */
+.info-msg {
+  margin-bottom: 20px;
+  padding: 10px 14px;
+  border-radius: var(--radius-md);
+  font-size: 0.875rem;
+  background: var(--color-success-subtle, #e8f6ee);
+  color: var(--color-success, #1a7f4b);
+  border: 1px solid currentColor;
+  line-height: 1.5;
+}
+.info-link {
+  display: block;
+  margin-top: 6px;
+  color: inherit;
+  text-decoration: underline;
+  word-break: break-all;
+}
+
+/* ===== Forgot password link ===== */
+.forgot-link {
+  text-align: center;
+  margin-top: 16px;
+}
+.link-btn {
+  background: none;
+  border: none;
+  cursor: pointer;
+  font-size: 0.8125rem;
+  color: var(--color-primary);
+  padding: 0;
+}
+.link-btn:hover {
+  text-decoration: underline;
+}
+
 /* ===== Form fields ===== */
 .field {
   margin-bottom: 18px;
@@ -313,6 +512,10 @@ async function onSubmit() {
 .field .optional {
   color: var(--text-tertiary);
   font-weight: 400;
+}
+.field .req {
+  color: var(--color-danger);
+  font-weight: 700;
 }
 .input-field {
   width: 100%;

@@ -36,24 +36,25 @@
         </div>
       </template>
 
-      <!-- Step 1-4: Spotlight + interactive bubble -->
+      <!-- Step 1-4: Spotlight + 悬浮卡片 (无全屏遮罩, 原 UI 100% 可交互) -->
       <template v-else-if="store.onboardingStep < totalSteps - 1">
-        <div class="tour-mask-transparent"></div>
-
-        <!-- Spotlight -->
-        <div v-if="targetRect" class="tour-spotlight" :class="{ 'tour-spotlight-pulse': isWaitingForAction }" :style="spotlightStyle"></div>
+        <!-- Spotlight (高亮边框 + 脉动) -->
+        <div v-if="targetRect && !modalOpen" class="tour-spotlight" :class="{ 'tour-spotlight-pulse': isWaitingForAction }" :style="spotlightStyle"></div>
 
         <!-- Bubble -->
         <Transition name="tour-float">
-          <div v-if="tooltipReady" class="tour-float-card" :style="tooltipStyle" :key="'tc-'+store.onboardingStep">
+          <div v-if="tooltipReady" class="tour-float-card" :class="['tour-float-' + tooltipSide]" :style="tooltipStyle" :key="'tc-'+store.onboardingStep">
             <div class="tour-step-badge-wrap">
               <span class="tour-step-badge">{{ store.onboardingStep + 1 }} / {{ totalSteps }}</span>
               <div class="tour-dots">
-                <span v-for="i in totalSteps" :key="i" class="tour-dot"
+                <button v-for="i in totalSteps" :key="i" type="button" class="tour-dot"
                   :class="{
                     'tour-dot-active': i - 1 === store.onboardingStep,
                     'tour-dot-done': i - 1 < store.onboardingStep
-                  }"></span>
+                  }"
+                  :aria-label="'跳转到第 ' + i + ' 步'"
+                  :title="'跳转到第 ' + i + ' 步'"
+                  @click="goToStep(i - 1)"></button>
               </div>
             </div>
 
@@ -79,8 +80,11 @@
             <div class="tour-footer" style="margin-top: 14px;">
               <button class="tour-btn-skip" @click="store.dismissOnboarding()">跳过引导</button>
               <div class="tour-btn-group">
-                <button class="tour-btn-secondary" @click="skipStep">
-                  跳过此步
+                <button class="tour-btn-primary" @click="skipStep">
+                  下一步
+                  <svg class="tour-btn-arrow" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M9 5l7 7-7 7"/>
+                  </svg>
                 </button>
               </div>
             </div>
@@ -198,6 +202,32 @@ const targetRect = ref(null);
 const tooltipReady = ref(false);
 const tooltipW = ref(360);
 const tooltipH = ref(320);
+const tooltipSide = ref('below'); // 'below' | 'above' | 'right' | 'left' | 'center' | 'corner'
+
+// ===== Modal-aware positioning =====
+// 应用中所有模态框 (CategoryDialog / NewNoteDialog / PreferenceDialog /
+// ShortcutHelp / UserGuide) 都遵循 W3C ARIA 标准:
+//   <div role="dialog" aria-modal="true">
+// 检测到任一打开时, 引导卡临时靠到右下角 + 抬升 z-index 到 60,
+// 既保留引导提示可见, 又不遮挡模态框内容.
+const modalOpen = ref(false);
+
+function isModalOpen() {
+  const modals = document.querySelectorAll('[role="dialog"][aria-modal="true"]');
+  for (const m of modals) {
+    // 过滤掉 onboarding tour 自己 (tour-root 没有 aria-modal, 不会匹配;
+    // 但保留这层保险, 万一未来加了也不会被自己误判)
+    if (m.closest('.tour-root')) continue;
+    if (m.getBoundingClientRect().width > 0) return true;
+  }
+  return false;
+}
+
+// 用 MutationObserver 监听模态框 mount/unmount, 比 setInterval 轻
+let modalObserver = null;
+function refreshModalState() {
+  modalOpen.value = isModalOpen();
+}
 
 const spotlightStyle = computed(() => {
   if (!targetRect.value) return { display: 'none' };
@@ -212,10 +242,27 @@ const spotlightStyle = computed(() => {
 });
 
 const tooltipStyle = computed(() => {
-  if (!targetRect.value && store.onboardingStep > 0 && store.onboardingStep < totalSteps - 1) {
-    return { top: '50%', left: '50%', transform: 'translate(-50%,-50%)' };
+  // 模态框打开时: 优先把引导卡靠到右下角, 不遮挡模态框内容
+  if (modalOpen.value) {
+    tooltipSide.value = 'corner';
+    return {
+      top: 'auto',
+      left: 'auto',
+      bottom: '24px',
+      right: '24px',
+      transform: 'none'
+    };
   }
-  if (!targetRect.value) return {};
+  // 所有"引导操作"步骤(1~4): 统一放屏幕底部居中、箭头朝上。
+  // 无论高亮的是侧边栏/笔记列表/编辑器/头像, 卡片都不会遮挡任何可交互区域,
+  // 从根本上杜绝"挡住输入框/头像"的问题 (之前按单步写死编号容易漏判)。
+  if (store.onboardingStep >= 1 && store.onboardingStep <= 4) {
+    tooltipSide.value = 'bottom-center';
+    return { top: 'auto', left: '50%', bottom: '24px', transform: 'translateX(-50%)' };
+  }
+  // 欢迎页(step 0)与完成页(step 5): 无需要交互的目标, 屏幕正中即可
+  tooltipSide.value = 'center';
+  return { top: '50%', left: '50%', transform: 'translate(-50%,-50%)' };
   const r = targetRect.value;
   const vw = window.innerWidth;
   const vh = window.innerHeight;
@@ -225,24 +272,29 @@ const tooltipStyle = computed(() => {
 
   // Try below first
   if (r.bottom + gap + h <= vh - 20) {
+    tooltipSide.value = 'below';
     let left = Math.max(16, Math.min(vw - w - 16, r.left + r.width / 2 - w / 2));
     return { top: r.bottom + gap + 'px', left: left + 'px', transform: 'none' };
   }
   // Try above
   if (r.top - gap - h >= 20) {
+    tooltipSide.value = 'above';
     let left = Math.max(16, Math.min(vw - w - 16, r.left + r.width / 2 - w / 2));
     return { top: r.top - gap - h + 'px', left: left + 'px', transform: 'none' };
   }
   // Right
   if (r.right + gap + w <= vw - 16) {
+    tooltipSide.value = 'right';
     let top = Math.max(16, Math.min(vh - h - 16, r.top + r.height / 2 - h / 2));
     return { top: top + 'px', left: r.right + gap + 'px', transform: 'none' };
   }
   // Left
   if (r.left - gap - w >= 16) {
+    tooltipSide.value = 'left';
     let top = Math.max(16, Math.min(vh - h - 16, r.top + r.height / 2 - h / 2));
     return { top: top + 'px', left: r.left - gap - w + 'px', transform: 'none' };
   }
+  tooltipSide.value = 'center';
   return { top: '50%', left: '50%', transform: 'translate(-50%,-50%)' };
 });
 
@@ -289,6 +341,12 @@ function finish() {
 
 function skipStep() {
   store.nextOnboardingStep();
+}
+
+// 引导卡顶部 dots 可点击, 跳到任意步骤 (用户要求的优化点)
+// 比如 step 4 想回头看 step 2 的内容, 直接点对应 dot
+function goToStep(i) {
+  store.goToOnboardingStep(i);
 }
 
 // ===== Action auto-advance watchers =====
@@ -363,20 +421,39 @@ function onResize() {
 onMounted(() => {
   window.addEventListener('resize', onResize);
   window.addEventListener('scroll', onResize, { passive: true });
+  // 监听模态框 mount/unmount, 触发引导卡重定位
+  modalObserver = new MutationObserver(() => {
+    refreshModalState();
+  });
+  modalObserver.observe(document.body, {
+    childList: true,
+    subtree: true,
+    attributes: true,
+    attributeFilter: ['aria-modal']
+  });
+  refreshModalState();
 });
 
 onUnmounted(() => {
   window.removeEventListener('resize', onResize);
   window.removeEventListener('scroll', onResize);
   clearTimeout(resizeTimer);
+  modalObserver?.disconnect();
+  modalObserver = null;
 });
 </script>
 
 <style scoped>
+/* tour-root 是 fixed 全屏容器, z-index 60.
+   必须 pointer-events: none, 否则它会拦截下层所有 UI 的鼠标事件
+   (子元素 pointer-events: none 救不回 - 事件停在父元素就下不去了).
+   真正需要接收事件的子元素 (.tour-float-card / .tour-card-centered / .tour-mask)
+   各自单独设 pointer-events: auto. */
 .tour-root {
   position: fixed;
   inset: 0;
   z-index: 60;
+  pointer-events: none;
 }
 
 /* Overlay */
@@ -385,23 +462,24 @@ onUnmounted(() => {
   inset: 0;
   background: rgba(0,0,0,0.55);
   z-index: 61;
+  pointer-events: auto;
+  cursor: pointer;
 }
-.tour-mask-transparent {
-  position: fixed;
-  inset: 0;
-  background: transparent;
-  z-index: 61;
-  pointer-events: none;
-}
+/* Step 1-4 设计: 不用全屏深色遮罩
+   原因: 用户希望"原 UI 完全可交互, 只让卡片悬浮 + spotlight 框"
+   spotlight 元素 z-index 50, 远高于原 UI (普遍 30+),
+   spotlight 自身 transparent + pointer-events: none, 不拦截事件,
+   只通过 3px 橙色边框视觉标记目标位置 */
 
-/* Spotlight */
+/* Spotlight: 只画橙色边框 (无 box-shadow 阴影, 避免 Chromium hit test 边缘)
+   pointer-events: none 不会拦截下层按钮
+   z-index 45 < 应用模态框 z-index 55, 模态框打开时自然覆盖引导元素 (避免遮挡) */
 .tour-spotlight {
   position: fixed;
-  z-index: 62;
+  z-index: 45;
   pointer-events: none;
-  box-shadow:
-    0 0 0 3px var(--color-accent),
-    0 0 0 9999px rgba(0, 0, 0, 0.5);
+  box-shadow: 0 0 0 3px var(--color-accent);
+  border-radius: 8px;
   transition: all 0.4s cubic-bezier(0.34, 1.56, 0.64, 1);
 }
 .tour-spotlight::after {
@@ -415,9 +493,10 @@ onUnmounted(() => {
 .tour-spotlight-pulse {
   animation: tour-pulse 2s ease-in-out infinite;
 }
+/* 脉动只动边框粗细 (3px <-> 5px), 不画 9999px 阴影 */
 @keyframes tour-pulse {
-  0%, 100% { box-shadow: 0 0 0 3px var(--color-accent), 0 0 0 9999px rgba(0,0,0,0.5); }
-  50% { box-shadow: 0 0 0 5px var(--color-accent), 0 0 0 9999px rgba(0,0,0,0.55); }
+  0%, 100% { box-shadow: 0 0 0 3px var(--color-accent); }
+  50%      { box-shadow: 0 0 0 5px var(--color-accent); }
 }
 
 /* Centered card */
@@ -444,7 +523,7 @@ onUnmounted(() => {
 /* Float card */
 .tour-float-card {
   position: fixed;
-  z-index: 63;
+  z-index: 45;
   pointer-events: auto;
   width: 360px;
   background: var(--bg-elevated);
@@ -452,6 +531,67 @@ onUnmounted(() => {
   border-radius: 16px;
   box-shadow: 0 12px 40px rgba(0,0,0,0.25);
   padding: 22px 24px 18px;
+}
+/* 模态框打开时: 引导卡临时靠到右下角, 抬升 z-index 到 60
+   (高于模态框 z-index 55, 但又不挡住模态框主体内容)
+   用户既能看到引导提示, 又不会被模态框遮挡 */
+.tour-float-corner {
+  z-index: 60;
+  width: 280px;
+  padding: 16px 18px 14px;
+}
+/* 箭头: 用 ::before + ::after 堆叠画三角形 (双层避开边框锯齿) */
+.tour-float-card::before,
+.tour-float-card::after {
+  content: '';
+  position: absolute;
+  width: 14px;
+  height: 14px;
+  background: var(--bg-elevated);
+  pointer-events: none;
+  z-index: 0;
+}
+/* 外层箭头 (边框色) */
+.tour-float-card::before {
+  background: var(--border-default);
+}
+/* 内层箭头 (卡片色, 盖住外层中间 = 看到 1px 边框) */
+/* 注意: 顺序是 ::before 后 ::after, 同位置时 ::after 在上 */
+.tour-float-above::before,
+.tour-float-above::after {
+  bottom: -7px;
+  left: 50%;
+  transform: translateX(-50%) rotate(45deg);
+  border-radius: 0 0 3px 0;
+}
+.tour-float-below::before,
+.tour-float-below::after {
+  top: -7px;
+  left: 50%;
+  transform: translateX(-50%) rotate(45deg);
+  border-radius: 3px 0 0 0;
+}
+.tour-float-right::before,
+.tour-float-right::after {
+  left: -7px;
+  top: 50%;
+  transform: translateY(-50%) rotate(45deg);
+  border-radius: 3px 0 0 0;
+}
+/* bottom-center: 固定在屏幕底部居中, 箭头朝上 (用于 step 3/4 不挡核心可交互区) */
+.tour-float-bottom-center::before,
+.tour-float-bottom-center::after {
+  top: -7px;
+  left: 50%;
+  transform: translateX(-50%) rotate(45deg);
+  border-radius: 3px 0 0 0;
+}
+.tour-float-left::before,
+.tour-float-left::after {
+  right: -7px;
+  top: 50%;
+  transform: translateY(-50%) rotate(45deg);
+  border-radius: 0 3px 0 0;
 }
 
 /* Accent bar */
@@ -494,7 +634,18 @@ onUnmounted(() => {
   height: 6px;
   border-radius: 50%;
   background: var(--border-default);
-  transition: all 0.3s ease;
+  border: none;
+  padding: 0;
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+.tour-dot:hover:not(.tour-dot-active) {
+  background: var(--text-tertiary);
+  transform: scale(1.4);
+}
+.tour-dot:focus-visible {
+  outline: 2px solid var(--color-accent);
+  outline-offset: 2px;
 }
 .tour-dot-active {
   width: 20px;

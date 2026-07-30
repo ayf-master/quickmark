@@ -49,6 +49,7 @@ export const store = reactive({
   editTitle: '',
   editContent: '',
   editCategoryIds: [],
+  editPlanData: null, // { start, end, progress, color } | null (计划甘特表)
   editLinks: [], // Wiki 链接标题列表
   markdownAssistEnabled: true,
   editMode: 'markdown', // 'plain' (纯文本) | 'markdown' (Markdown + 预览)
@@ -291,19 +292,32 @@ export const store = reactive({
       store.onboardingStep--;
     }
   },
+  // 跳到任意步骤 (引导卡顶部 dots 可点击), 用于快速回顾之前讲过的功能
+  goToOnboardingStep(i) {
+    if (typeof i !== 'number') return;
+    if (i < 0 || i >= ONBOARDING_TOTAL_STEPS) return;
+    store.onboardingStep = i;
+  },
+  // Onboarding 完成标记按 userId 隔离: 不同账号各自记一次
+  // (浏览器级 key 会导致同浏览器注册新用户也不弹, 已修)
+  onboardingDoneKey() {
+    const id = store.currentUser && store.currentUser.id != null
+      ? String(store.currentUser.id)
+      : 'guest';
+    return `quickmark-onboarding-done-${id}`;
+  },
   dismissOnboarding() {
     store.onboardingVisible = false;
-    try { localStorage.setItem('quickmark-onboarding-done', '1'); } catch (e) {}
+    try { localStorage.setItem(store.onboardingDoneKey(), '1'); } catch (e) {}
   },
   initOnboarding() {
-    // 老用户 localStorage 清理
+    // 一次性迁移: 清掉老版本浏览器级 key (从 v1.2 起按用户维度记录)
     try { localStorage.removeItem('quickmark-onboarding-dismissed'); } catch (e) {}
-    // 首次登录自动弹出
-    try {
-      if (!localStorage.getItem('quickmark-onboarding-done')) {
-        store.startOnboarding();
-      }
-    } catch (e) {}
+    try { localStorage.removeItem('quickmark-onboarding-done'); } catch (e) {}
+    // 设计变更: 不再自动弹引导卡
+    // 之前新用户首次登录会自动弹出, 用户反馈"每次刷新都弹"太打扰
+    // 现在: 只在右上角齿轮菜单 → "新手引导" 才会启动 (onRestartOnboarding)
+    // 所有账号默认 onboardingVisible = false, 不会自动跳出
   },
 
   // ===== User Guide =====
@@ -451,6 +465,7 @@ export const store = reactive({
   openNote(note) {
     store.editingNote = { ...note };
     store.editTitle = note.title || '';
+    store.editPlanData = note.planData ? (typeof note.planData === 'string' ? JSON.parse(note.planData) : note.planData) : null;
     store.editLinks = [];
     let content = note.content || '';
     const linkMatch = content.match(/<!--\s*qm-links:([^]*?)-->/);
@@ -472,6 +487,28 @@ export const store = reactive({
       store.editLinks = [];
     }
     store.editContent = content;
+    // 旧数据迁移: 正文里残留的 <!-- qm-plan --> → 提取到 editPlanData, 从正文清掉
+    if (!store.editPlanData && note.content) {
+      const oldPlanMatch = note.content.match(/<!--\s*qm-plan:\s*([^]*?)-->/);
+      if (oldPlanMatch) {
+        const raw = oldPlanMatch[1].trim();
+        const plan = {};
+        raw.split(',').map(s => s.trim()).forEach(p => {
+          const eqIdx = p.indexOf('=');
+          if (eqIdx === -1) return;
+          const key = p.slice(0, eqIdx).trim();
+          const val = p.slice(eqIdx + 1).trim();
+          if (key === 'start' || key === 'end') plan[key] = val;
+          if (key === 'progress') plan.progress = Math.min(100, Math.max(0, parseInt(val) || 0));
+          if (key === 'color') plan.color = /^#[0-9a-f]{6}$/i.test(val) ? val : null;
+        });
+        if (plan.start && plan.end) {
+          store.editPlanData = { start: plan.start, end: plan.end, progress: plan.progress ?? 0, color: plan.color || undefined };
+          // 从正文清除旧注释
+          store.editContent = store.editContent.replace(/<!--\s*qm-plan:[\s\S]*?-->\s*/g, '').trim();
+        }
+      }
+    }
     store.editCategoryIds = note.category_ids ? [...note.category_ids] : [];
     store.editMode = store.defaultEditMode !== 'auto'
       ? store.defaultEditMode
@@ -500,6 +537,7 @@ export const store = reactive({
     store.editTitle = '';
     store.editContent = '';
     store.editCategoryIds = [];
+    store.editPlanData = null;
     store.editLinks = [];
     store.editMode = 'markdown';
     store.editorPreviewVisible = true;
@@ -530,15 +568,19 @@ export const store = reactive({
   async saveCurrentNote() {
     if (!store.editingNote || !store.editingNote.id) return;
     const noteId = store.editingNote.id;
-    // 构建内容: 去掉旧链接标记, 追加当前链接
-    let content = (store.editContent || '').replace(/<!--\s*qm-links:[\s\S]*?-->\s*/g, '').trim();
+    // 构建内容: 去掉旧链接/计划标记, 追加当前链接
+    let content = (store.editContent || '')
+      .replace(/<!--\s*qm-links:[\s\S]*?-->\s*/g, '')
+      .replace(/<!--\s*qm-plan:[\s\S]*?-->\s*/g, '')
+      .trim();
     if (store.editLinks && store.editLinks.length > 0) {
       content += '\n<!-- qm-links:' + JSON.stringify(store.editLinks) + ' -->';
     }
     const data = {
       title: store.editTitle || '无标题',
       content: content,
-      category_ids: store.editCategoryIds
+      category_ids: store.editCategoryIds,
+      planData: store.editPlanData || null
     };
     try {
       const result = await API.updateNote(noteId, data);
@@ -559,7 +601,8 @@ export const store = reactive({
             title: data.title,
             content: data.content,
             category_ids: [...store.editCategoryIds],
-            category_names: catNames
+            category_names: catNames,
+            planData: data.planData
           };
         }
       } catch (e) {

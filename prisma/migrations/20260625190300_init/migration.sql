@@ -54,14 +54,3 @@ ALTER TABLE `note_categories` ADD CONSTRAINT `note_categories_note_id_fkey` FORE
 
 -- AddForeignKey
 ALTER TABLE `note_categories` ADD CONSTRAINT `note_categories_category_id_fkey` FOREIGN KEY (`category_id`) REFERENCES `categories`(`id`) ON DELETE CASCADE ON UPDATE CASCADE;
-
-┌─────────────────────────────────────────────────────────┐
-│  Update available 5.22.0 -> 7.8.0                       │
-│                                                         │
-│  This is a major update - please follow the guide at    │
-│  https://pris.ly/d/major-version-upgrade                │
-│                                                         │
-│  Run the following to update                            │
-│    npm i --save-dev prisma@latest                       │
-│    npm i @prisma/client@latest                          │
-└─────────────────────────────────────────────────────────┘

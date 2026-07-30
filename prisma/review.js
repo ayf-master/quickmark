@@ -1,46 +1,31 @@
-// 间隔重复 — 数据访问层
-// 依赖: prisma client, sm2 算法, [[quiz]] 正则解析
-// 所有查询都带 userId, 沿用项目多用户隔离规矩
+// 间隔重复 — 简化版: 按遗忘曲线提醒用户复习笔记
+// 核心: SM-2 算法调度, 到期笔记在列表高亮, 用户阅读后标记已复习
+// 不再有 [[quiz]] 解析 / 自测卡 / Q&A 评分界面
+
 const { gradeCard } = require('./sm2');
 
-// 与前端 wiki-link.js 同思路: 从笔记内容解析 [[quiz:问题|答案]]
-const QUIZ_RE = /\[\[quiz:([^\]|]+)\|([^\]]+)\]\]/g;
-
-// 从笔记内容解析出 quiz 题目数组 (不单独存表, 内容即数据)
-function parseQuizzes(content) {
-  if (!content) return [];
-  const out = [];
-  let m;
-  QUIZ_RE.lastIndex = 0;
-  while ((m = QUIZ_RE.exec(content)) !== null) {
-    out.push({ question: m[1].trim(), answer: m[2].trim() });
-  }
-  return out;
-}
-
-// 今天 23:59:59.999 — 取今日队列的 due 上界 (按日期不看时分)
+// 今天 23:59:59.999 — 取今日队列的 due 上界
 function endOfToday() {
   const d = new Date();
   d.setHours(23, 59, 59, 999);
   return d;
 }
 
-// 本地日期字符串 YYYY-MM-DD (用本地时区, 避免 UTC 偏移导致跨天误判)
+// 本地日期字符串 YYYY-MM-DD
 function dateToStr(d) {
   const m = String(d.getMonth() + 1).padStart(2, '0');
   const day = String(d.getDate()).padStart(2, '0');
   return `${d.getFullYear()}-${m}-${day}`;
 }
 
-// 连续打卡 streak: 今天已复习则不变; 昨天复习过 +1; 否则重置为 1
-// 放 User 表维度 (不放 settings), 评分成功时调用
+// 连续打卡 streak
 async function bumpStreak(userId, prisma) {
   const user = await prisma.user.findUnique({
     where: { id: userId },
     select: { reviewStreak: true, lastReviewDate: true }
   });
   const today = dateToStr(new Date());
-  const prev = user && user.lastReviewDate ? dateToStr(user.lastReviewDate) : null;
+  const prev = user?.lastReviewDate ? dateToStr(user.lastReviewDate) : null;
   let streak = user?.reviewStreak || 0;
   if (prev !== today) {
     const y = new Date();
@@ -55,7 +40,7 @@ async function bumpStreak(userId, prisma) {
   return streak;
 }
 
-// 加入复习: 为某篇笔记建一张 ReviewCard (已有则忽略)
+// 注册复习: 为一篇笔记建一张 ReviewCard (已有则忽略)
 async function enrollNote(userId, noteId, prisma) {
   const nid = parseInt(noteId);
   const note = await prisma.note.findFirst({ where: { id: nid, userId } });
@@ -63,60 +48,57 @@ async function enrollNote(userId, noteId, prisma) {
   const existing = await prisma.reviewCard.findFirst({ where: { noteId: nid, userId } });
   if (existing) return { card: existing, created: false };
   const card = await prisma.reviewCard.create({
-    data: { noteId: nid, userId, dueDate: new Date() } // 立即进入今日队列
+    data: { noteId: nid, userId, dueDate: new Date() }
   });
   return { card, created: true };
 }
 
-// 批量注册: 扫描用户所有含 [[quiz]] 的笔记, 建复习卡 (供「今日为空自动点亮旧笔记」)
+// 批量注册: 为用户所有笔记建复习卡
 async function enrollAll(userId, prisma) {
   const notes = await prisma.note.findMany({
     where: { userId },
-    select: { id: true, content: true }
+    select: { id: true }
   });
   let created = 0;
   for (const n of notes) {
-    if (parseQuizzes(n.content).length === 0) continue;
     const r = await enrollNote(userId, n.id, prisma);
     if (r.created) created += 1;
   }
   return { created };
 }
 
-// 今日队列: dueDate <= 今天结束 的卡, 带笔记标题 + 解析出的 quiz
-async function getTodayQueue(userId, prisma) {
+// 获取今日到期笔记列表 (仅返回 noteId + title)
+async function getDueNotes(userId, prisma) {
   const cards = await prisma.reviewCard.findMany({
     where: { userId, dueDate: { lte: endOfToday() } },
     orderBy: { dueDate: 'asc' },
-    include: { note: { select: { id: true, title: true, content: true } } }
+    include: { note: { select: { id: true, title: true, mastery: true } } }
   });
-  return cards.map((c) => ({
-    id: c.id,
+  return cards.map(c => ({
+    cardId: c.id,
     noteId: c.noteId,
-    dueDate: c.dueDate,
-    interval: c.interval,
-    easeFactor: c.easeFactor,
-    reps: c.reps,
-    note: { id: c.note.id, title: c.note.title },
-    quizzes: parseQuizzes(c.note.content)
+    title: c.note.title || '未命名笔记',
+    mastery: c.note.mastery ?? 0,
+    dueDate: c.dueDate
   }));
 }
 
-// 评分: 更新卡状态 + 重算 Note.mastery (0-5)
-async function gradeCardId(userId, cardId, quality, prisma) {
+// 标记一篇笔记为"已复习" (使用 SM-2, quality=4 表示"记得")
+async function markReviewed(userId, cardId, prisma) {
   const cid = parseInt(cardId);
   const card = await prisma.reviewCard.findFirst({ where: { id: cid, userId } });
   if (!card) return { error: 'not_found' };
 
+  // quality=4 (Good), 表示用户阅读后记住了内容
   const res = gradeCard(
     { easeFactor: card.easeFactor, interval: card.interval, reps: card.reps },
-    quality
+    4
   );
 
   const due = new Date();
   due.setDate(due.getDate() + res.dueInDays);
 
-  const updated = await prisma.reviewCard.update({
+  await prisma.reviewCard.update({
     where: { id: cid },
     data: {
       easeFactor: res.easeFactor,
@@ -127,17 +109,15 @@ async function gradeCardId(userId, cardId, quality, prisma) {
     }
   });
 
-  // 掌握度 0-5: reps 越高越熟, interval>=15 天额外 +1 (驱动知识图谱着色)
+  // 掌握度 0-5
   const mastery = Math.max(0, Math.min(5, res.reps + (res.interval >= 15 ? 1 : 0)));
   await prisma.note.update({ where: { id: card.noteId }, data: { mastery } });
 
-  // 连续打卡 streak (用户维度)
   const streak = await bumpStreak(userId, prisma);
-
-  return { card: updated, mastery, streak };
+  return { card: { id: cid }, mastery, streak, nextDue: due };
 }
 
-// 复习统计: 今日待复习 / 总卡数 / 已掌握数(mastery>=4) / 连续打卡
+// 复习统计
 async function getStats(userId, prisma) {
   const [due, total, mastered, user] = await Promise.all([
     prisma.reviewCard.count({ where: { userId, dueDate: { lte: endOfToday() } } }),
@@ -153,4 +133,4 @@ async function getStats(userId, prisma) {
   };
 }
 
-module.exports = { parseQuizzes, enrollNote, enrollAll, getTodayQueue, gradeCardId, getStats };
+module.exports = { enrollNote, enrollAll, getDueNotes, markReviewed, getStats };

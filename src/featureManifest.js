@@ -1,28 +1,33 @@
 // QuickMark - 功能清单 (清单式注册表)
-// 加新功能只改这里: 声明 id / 标题 / 描述 / 懒加载组件 loader。
-// loader 返回一个动态 import, Vite 会自动把它拆成独立分包 (默认不进主包)。
-// Phase 0 三个功能共用 FeaturePlaceholder 占位; Phase 1 起把 spacedRepetition.loader
-// 换成真正的 ReviewQueue.vue 即可, 其余不动。
-const placeholder = () => import('@/components/FeaturePlaceholder.vue');
-const reviewQueue = () => import('@/components/ReviewQueue.vue');
+//
+// slot 决定组件出现在页面哪个位置:
+//   'sidebar-bottom' — 侧边栏底部 (常驻内联)
+//   无 slot — 手动触发 (由 AppHeader 或页面按钮控制)
+
+import { defineAsyncComponent } from 'vue';
+
+const placeholder = defineAsyncComponent(() => import('@/components/FeaturePlaceholder.vue'));
+const canvasBoard = defineAsyncComponent(() => import('@/components/CanvasBoard.vue'));
 
 export const featuresManifest = [
   {
     id: 'spacedRepetition',
     title: '间隔重复',
-    desc: '把笔记变成能复习的学习引擎，支持 [[quiz:问题|答案]] 自测卡与掌握度追踪。',
-    loader: reviewQueue
+    desc: '基于遗忘曲线提醒复习, 到期笔记在列表中高亮显示, 阅读后点击标记已复习即可。',
+    available: true,
+    hasBadge: true
   },
   {
     id: 'canvas',
     title: '2D 画布',
     desc: '无限缩放的知识画布，笔记是可拖拽的卡片。',
-    loader: placeholder
+    available: true,
+    component: canvasBoard
   },
   {
-    id: 'learningPath',
-    title: '学习路径',
-    desc: '带前置依赖的路线与完成度进度。',
-    loader: placeholder
+    id: 'ganttChart',
+    title: '计划甘特表',
+    desc: '为笔记设定起止日期，以甘特图直观展示时间规划与进度。',
+    available: true
   }
 ];

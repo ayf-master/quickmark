@@ -19,7 +19,15 @@
  */
 const express = require('express');
 const router = express.Router();
+const crypto = require('crypto');
 const auth = require('./auth');
+const logger = require('../src/utils/logger');
+
+// 延迟加载 email 模块 + 清缓存, 绕过 Docker bind mount 的 Node require 缓存问题
+function getEmail() {
+  delete require.cache[require.resolve('./email')];
+  return require('./email');
+}
 const { Prisma } = require('@prisma/client');
 const rateLimit = require('express-rate-limit');
 
@@ -36,6 +44,15 @@ const registerLimiter = rateLimit({
 function getPrisma(req) {
   return req.app.locals.prisma;
 }
+
+// 🔒 找回密码限流: 5 次/小时/IP, 防邮件轰炸 / 账号枚举探测
+const forgotLimiter = rateLimit({
+  windowMs: 60 * 60 * 1000,
+  max: 5,
+  message: { error: '请求过于频繁, 请 1 小时后再试' },
+  standardHeaders: true,
+  legacyHeaders: false
+});
 
 // ==================== POST /api/auth/login ====================
 
@@ -167,6 +184,14 @@ router.post('/register', registerLimiter, async (req, res) => {
     if (!username || !password) {
       return res.status(400).json({ error: '用户名和密码必填' });
     }
+    // 邮箱必填 + 格式校验: 找回密码流程依赖邮箱, 注册时就必须采集
+    if (!email || !email.trim()) {
+      return res.status(400).json({ error: '邮箱必填, 用于找回密码' });
+    }
+    const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+    if (!EMAIL_RE.test(email.trim())) {
+      return res.status(400).json({ error: '邮箱格式不正确' });
+    }
     if (password.length < 6) {
       return res.status(400).json({ error: '密码至少 6 位' });
     }
@@ -174,10 +199,18 @@ router.post('/register', registerLimiter, async (req, res) => {
     const prisma = getPrisma(req);
     const dal = require('./dal');
 
+    // 显式查重, 给出精确提示 (比笼统的 P2002 友好)
+    if (await dal.findUserByUsername(username, prisma)) {
+      return res.status(409).json({ error: '用户名已被占用' });
+    }
+    if (await dal.findUserByEmail(email.trim(), prisma)) {
+      return res.status(409).json({ error: '邮箱已被占用' });
+    }
+
     const passwordHash = await auth.hashPassword(password);
     const user = await dal.createUser({
       username,
-      email,
+      email: email.trim(),
       passwordHash,
       displayName,
       role: 'user'
@@ -207,6 +240,94 @@ router.post('/register', registerLimiter, async (req, res) => {
       return res.status(409).json({ error: '用户名或邮箱已被占用' });
     }
     res.status(500).json({ error: err.message || '注册失败' });
+  }
+});
+
+// ==================== POST /api/auth/forgot-password ====================
+// 输入邮箱 → 发 6 位验证码。无论邮箱是否存在都返回相同提示, 防账号枚举。
+router.post('/forgot-password', forgotLimiter, async (req, res) => {
+  try {
+    const { email } = req.body || {};
+    if (!email || !email.trim()) {
+      return res.status(400).json({ error: '请输入邮箱' });
+    }
+
+    const prisma = getPrisma(req);
+    const dal = require('./dal');
+
+    const user = await dal.findUserByEmail(email, prisma);
+    const okMsg = '验证码已发送到邮箱, 请查收（5 分钟内有效）';
+
+    if (user) {
+      // 1. 生成 6 位数字验证码 + 存其 SHA-256 哈希
+      const code = String(Math.floor(100000 + Math.random() * 900000));
+      const codeHash = crypto.createHash('sha256').update(code).digest('hex');
+      const expiresAt = new Date(Date.now() + 5 * 60 * 1000); // 5 分钟有效
+
+      await dal.setPasswordResetToken(user.id, codeHash, expiresAt, prisma);
+
+      // 2. 发邮件 (失败静默, 防枚举)
+      try {
+        await getEmail().sendCodeEmail({ to: user.email, code, username: user.username });
+      } catch (mailErr) {
+        logger.warn('[找回密码] 邮件发送失败:', mailErr.message, mailErr.code, mailErr.response);
+        console.error('[DEBUG] 完整错误:', mailErr);
+      }
+
+      // 开发环境 (无真实 SMTP) 回传验证码方便测试
+      if (!process.env.SMTP_HOST) {
+        return res.json({ ok: true, message: okMsg, devCode: code });
+      }
+    }
+
+    res.json({ ok: true, message: okMsg });
+  } catch (err) {
+    const status = err.statusCode || 500;
+    res.status(status).json({ error: err.message || '请求失败' });
+  }
+});
+
+// ==================== POST /api/auth/reset-password ====================
+// 输入邮箱 + 验证码 + 新密码 → 校验 → 改密码
+router.post('/reset-password', async (req, res) => {
+  try {
+    const { email, code, password } = req.body || {};
+    if (!email || !code || !password) {
+      return res.status(400).json({ error: '邮箱、验证码和新密码都必填' });
+    }
+    if (password.length < 6) {
+      return res.status(400).json({ error: '密码至少 6 位' });
+    }
+
+    const prisma = getPrisma(req);
+    const dal = require('./dal');
+
+    // 1. 按邮箱找到用户
+    const user = await dal.findUserByEmail(email, prisma);
+    if (!user || !user.passwordResetToken) {
+      return res.status(400).json({ error: '验证码无效或已过期, 请重新申请' });
+    }
+
+    // 2. 校验验证码
+    const codeHash = crypto.createHash('sha256').update(code).digest('hex');
+    if (user.passwordResetToken !== codeHash) {
+      return res.status(400).json({ error: '验证码错误' });
+    }
+    if (user.passwordResetExpires && user.passwordResetExpires < new Date()) {
+      return res.status(400).json({ error: '验证码已过期, 请重新申请' });
+    }
+
+    // 3. 改密码
+    const passwordHash = await auth.hashPassword(password);
+    await dal.updatePassword(user.id, passwordHash, prisma);
+
+    // 4. 用完即废
+    await dal.clearPasswordResetToken(user.id, prisma);
+
+    res.json({ ok: true, message: '密码已重置, 请用新密码登录' });
+  } catch (err) {
+    const status = err.statusCode || 500;
+    res.status(status).json({ error: err.message || '重置失败' });
   }
 });
 

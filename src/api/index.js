@@ -120,6 +120,31 @@ const API = {
     return data.user || null;
   },
 
+  // ===== 找回密码 (Auth, 无需登录) =====
+  async forgotPassword(email) {
+    const resp = await fetch('/api/auth/forgot-password', {
+      method: 'POST',
+      credentials: 'include',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ email })
+    });
+    const data = await resp.json().catch(() => ({}));
+    if (!resp.ok) throw new Error(data.error || '请求失败');
+    return data; // 含 devCode (开发环境)
+  },
+
+  async resetPassword(email, code, password) {
+    const resp = await fetch('/api/auth/reset-password', {
+      method: 'POST',
+      credentials: 'include',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ email, code, password })
+    });
+    const data = await resp.json().catch(() => ({}));
+    if (!resp.ok) throw new Error(data.error || '重置失败');
+    return data;
+  },
+
   // ===== Notes =====
   async getNotes(params = {}) {
     const q = new URLSearchParams(params).toString();
@@ -276,25 +301,28 @@ const API = {
 
   // ===== 间隔重复 (Spaced Repetition) =====
   async enrollReview() {
-    // 批量注册: 扫描全部含 [[quiz]] 的笔记, 建复习卡
+    // 批量注册所有笔记的复习卡
     const resp = await authedFetch('/api/review/enroll-all', { method: 'POST' });
     if (!resp.ok) throw new Error('注册复习卡失败');
     return resp.json();
   },
-  async getReviewQueue() {
-    // 返回今日待复习队列 { today: [{cardId,noteId,title,q,a,dueDate}], mastery:{...} }
-    const resp = await authedFetch('/api/review/today');
-    if (!resp.ok) throw new Error('获取复习队列失败');
+  async getDueNotes() {
+    // 返回今日到期笔记列表 { due: [{cardId,noteId,title,mastery}], count }
+    const resp = await authedFetch('/api/review/due');
+    if (resp.status === 403) {
+      const err = new Error('请先在右上角齿轮菜单开启"间隔重复"功能');
+      err.code = 'FEATURE_DISABLED';
+      throw err;
+    }
+    if (!resp.ok) throw new Error('获取到期笔记失败');
     return resp.json();
   },
-  async gradeReview(cardId, quality) {
-    // quality: 0-5 (Again/Hard/Good/Easy 映射到 0/3/4/5)
-    const resp = await authedFetch('/api/review/' + cardId + '/grade', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ quality })
+  async markReviewed(cardId) {
+    // 标记一篇笔记为已复习, SM-2 自动排下次时间
+    const resp = await authedFetch('/api/review/' + cardId + '/mark', {
+      method: 'POST'
     });
-    if (!resp.ok) throw new Error('评分失败');
+    if (!resp.ok) throw new Error('标记失败');
     return resp.json();
   },
   async getReviewStats() {

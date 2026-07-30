@@ -55,6 +55,32 @@
       <!-- 扩展功能 (功能开关面板) -->
       <FeaturePanel />
 
+      <!-- 拓展功能入口: 仅已激活才显示对应的快捷按钮 -->
+      <button v-if="features.spacedRepetition"
+        @click="goToDueNotes"
+        class="btn btn-icon btn-ghost relative"
+        aria-label="间隔重复"
+        title="到期复习笔记数">
+        <span style="font-size:16px;line-height:1;">📝</span>
+        <span v-if="features.dueCount > 0" class="header-badge">{{ features.dueCount > 99 ? '99+' : features.dueCount }}</span>
+      </button>
+
+      <button v-if="features.canvas"
+        @click="openCanvas"
+        class="btn btn-icon btn-ghost"
+        aria-label="2D 画布"
+        title="2D 画布 (Esc 关闭)">
+        <span style="font-size:16px;line-height:1;">🖼</span>
+      </button>
+
+      <button v-if="features.ganttChart"
+        @click="openGantt"
+        class="btn btn-icon btn-ghost"
+        aria-label="计划甘特表"
+        title="计划甘特表 (Esc 关闭)">
+        <span style="font-size:16px;line-height:1;">📊</span>
+      </button>
+
       <!-- 移动端: 新建笔记快捷按钮 -->
       <button v-if="store.isCompact"
         class="btn btn-icon btn-primary"
@@ -143,6 +169,22 @@
             <span>使用指南</span>
           </button>
 
+          <!-- 新手引导 (重看) -->
+          <button
+            class="w-full text-left px-4 py-2 text-sm flex items-center gap-2 transition-colors"
+            style="color: var(--text-primary);"
+            @click="onRestartOnboarding"
+            @mouseenter="(e) => e.currentTarget.style.background = 'var(--bg-panel)'"
+            @mouseleave="(e) => e.currentTarget.style.background = 'transparent'">
+            <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                d="M9.937 15.5A2 2 0 0 0 8.5 14.063l-6.135-1.582a.5.5 0 0 1 0-.962L8.5 9.936A2 2 0 0 0 9.937 8.5l1.582-6.135a.5.5 0 0 1 .963 0L14.063 8.5A2 2 0 0 0 15.5 9.937l6.135 1.581a.5.5 0 0 1 0 .964L15.5 14.063a2 2 0 0 0-1.437 1.437l-1.582 6.135a.5.5 0 0 1-.963 0z"/>
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                d="M20 3v4 M22 5h-4 M4 17v2 M5 18H3"/>
+            </svg>
+            <span>新手引导</span>
+          </button>
+
           <!-- 快捷键面板 -->
           <button
             class="w-full text-left px-4 py-2 text-sm flex items-center gap-2 transition-colors"
@@ -205,13 +247,28 @@
       </div>
     </div>
   </header>
+
+  <!-- 2D 画布覆盖层 -->
+  <Teleport to="body">
+    <div v-if="showCanvasOverlay" class="canvas-overlay-wrapper" style="position:fixed;inset:0;z-index:200;">
+      <CanvasBoard @close="closeCanvas" />
+    </div>
+  </Teleport>
+
+  <!-- 甘特表覆盖层 -->
+  <Teleport to="body">
+    <GanttChart :visible="showGantt" @close="showGantt = false" />
+  </Teleport>
 </template>
 
 <script setup>
-import { ref, computed, onMounted, onUnmounted } from 'vue';
+import { ref, computed, watch, nextTick, onMounted, onUnmounted } from 'vue';
 import { store } from '@/store';
+import { features, setFeature, refreshDueNotes } from '@/store/features.js';
 import ThemeToggle from '@/components/ThemeToggle.vue';
 import FeaturePanel from '@/components/FeaturePanel.vue';
+import CanvasBoard from '@/components/CanvasBoard.vue';
+import GanttChart from '@/components/GanttChart.vue';
 
 const isAdmin = computed(() => store.currentUser?.role === 'admin');
 
@@ -227,6 +284,47 @@ function onOpenFeedbackAdmin() {
 const emit = defineEmits(['logout', 'openFeedback', 'openFeedbackAdmin']);
 const menuOpen = ref(false);
 const menuRef = ref(null);
+
+// ===== 拓展功能入口 =====
+
+function goToDueNotes() {
+  const s = store;
+  if (s.searchQuery || s.selectedCategoryId || s.showPinnedOnly) {
+    s.selectAllNotes();
+  }
+  nextTick(() => {
+    const el = document.querySelector('.is-due-review');
+    if (el) el.scrollIntoView({ behavior: 'smooth', block: 'center' });
+  });
+}
+
+const showCanvasOverlay = ref(false);
+const showGantt = ref(false);
+
+function openCanvas() {
+  if (!features.canvas) return;
+  showCanvasOverlay.value = true;
+}
+
+function closeCanvas() {
+  showCanvasOverlay.value = false;
+}
+
+function openGantt() {
+  if (!features.ganttChart) return;
+  showGantt.value = true;
+}
+
+// 如果用户在齿轮面板关掉了 canvas 功能, 同步关掉覆盖层
+watch(() => features.canvas, (val) => {
+  if (!val) showCanvasOverlay.value = false;
+});
+// 关掉甘特表功能时同步关闭
+watch(() => features.ganttChart, (val) => {
+  if (!val) showGantt.value = false;
+});
+
+// 移除: 旧学习路径 scrollToLearningPath
 
 const displayName = computed(() => {
   const u = store.currentUser;
@@ -248,8 +346,15 @@ function onClickOutside(e) {
   }
 }
 
+// 监听间隔重复开关, 刷新到期数
+watch(() => features.spacedRepetition, (val) => {
+  if (val) refreshDueNotes();
+  else { features.dueNoteIds = []; features.dueCardMap = {}; features.dueCount = 0; }
+});
+
 onMounted(() => {
   document.addEventListener('click', onClickOutside);
+  if (features.spacedRepetition) refreshDueNotes();
 });
 
 onUnmounted(() => {
@@ -266,6 +371,13 @@ function onOpenGuide() {
   store.openUserGuide();
 }
 
+function onRestartOnboarding() {
+  menuOpen.value = false;
+  // 清掉当前账号的"已看"标记, 重新从第 0 步开始
+  try { localStorage.removeItem(store.onboardingDoneKey()); } catch (e) {}
+  store.startOnboarding();
+}
+
 function onOpenShortcuts() {
   menuOpen.value = false;
   store.shortcutPanelVisible = true;
@@ -276,3 +388,22 @@ function onOpenPreferences() {
   store.preferencePanelVisible = true;
 }
 </script>
+
+<style scoped>
+.header-badge {
+  position: absolute;
+  top: -2px;
+  right: -2px;
+  min-width: 14px;
+  height: 14px;
+  padding: 0 3px;
+  border-radius: 999px;
+  background: #ef4444;
+  color: #fff;
+  font-size: 9px;
+  font-weight: 700;
+  line-height: 14px;
+  text-align: center;
+  border: 1.5px solid var(--bg-elevated);
+}
+</style>

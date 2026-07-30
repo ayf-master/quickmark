@@ -49,6 +49,9 @@
       <FeedbackAdmin :visible="feedbackAdminVisible" @close="feedbackAdminVisible = false" />
       <Toast />
     </template>
+
+    <!-- 拓展功能: 2D 画布 (main-overlay slot, 全屏覆盖) -->
+    <ExtensionSlot name="main-overlay" />
   </div>
 </template>
 
@@ -70,6 +73,7 @@ import LoginView from '@/components/LoginView.vue';
 import FeedbackDialog from '@/components/FeedbackDialog.vue';
 import FeedbackAdmin from '@/components/FeedbackAdmin.vue';
 import KnowledgeGraph from '@/components/KnowledgeGraph.vue';
+import ExtensionSlot from '@/components/ExtensionSlot.vue';
 import API from '@/api/index.js';
 import { initFeatures, resetFeatures } from '@/store/features.js';
 

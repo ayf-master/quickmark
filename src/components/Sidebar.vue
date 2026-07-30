@@ -123,6 +123,9 @@
         <span class="text-xs ml-auto" style="color: var(--text-tertiary);">⌘G</span>
       </button>
     </div>
+
+    <!-- 拓展功能插槽 (预留) -->
+    <ExtensionSlot name="sidebar-bottom" />
   </aside>
 </template>
 
@@ -130,6 +133,7 @@
 import { computed, watch, nextTick } from 'vue';
 import { store } from '@/store';
 import CategoryTreeNode from '@/components/CategoryTreeNode.vue';
+import ExtensionSlot from '@/components/ExtensionSlot.vue';
 
 const sidebarClass = computed(() => ({
   'sidebar-desktop': store.isDesktop,
@@ -249,4 +253,5 @@ watch(() => store.mobileDrawerOpen, (open) => {
 .rotate-90 {
   transform: rotate(90deg);
 }
+
 </style>

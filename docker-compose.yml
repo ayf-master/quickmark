@@ -10,10 +10,6 @@ services:
       MYSQL_COLLATION_SERVER: utf8mb4_unicode_ci
     volumes:
       - mysql_data:/var/lib/mysql
-      - ./db/schema.sql:/docker-entrypoint-initdb.d/01-schema.sql:ro
-      - ./db/migration_v2_hierarchical.sql:/docker-entrypoint-initdb.d/02-hierarchical.sql:ro
-      - ./db/migration_v3_user_id.sql:/docker-entrypoint-initdb.d/03-user-id.sql:ro
-      - ./db/migration_v4_position.sql:/docker-entrypoint-initdb.d/04-position.sql:ro
     ports:
       - "127.0.0.1:3306:3306"
     healthcheck:
@@ -26,7 +22,7 @@ services:
     container_name: quickmark-redis
     restart: always
     ports:
-      - "127.0.0.1:6379:6379"
+      - "127.0.0.1:6380:6379"
     healthcheck:
       test: ["CMD", "redis-cli", "ping"]
       timeout: 5s
@@ -55,11 +51,21 @@ services:
       JWT_AUDIENCE: quickmark-web
       REDIS_URL: redis://redis:6379
       LOG_LEVEL: info
-      ALLOW_REGISTER: "0"
+      ALLOW_REGISTER: "1"
+      SMTP_HOST: smtp.qq.com
+      SMTP_PORT: "465"
+      SMTP_SECURE: "true"
+      SMTP_USER: 3351247805@qq.com
+      SMTP_PASS: mjlfdycfnxiachjj
+      MAIL_FROM: "QuickMark <3351247805@qq.com>"
     ports:
       - "3000:3000"
     volumes:
       - uploads:/app/uploads
+      # 开发期挂载后端代码, 改 prisma/*.js / server.js 即时生效 (无需重建镜像)
+      - ./prisma:/app/prisma
+      - ./server.js:/app/server.js
+      - ./docker-entrypoint.sh:/app/docker-entrypoint.sh
 
 volumes:
   mysql_data:

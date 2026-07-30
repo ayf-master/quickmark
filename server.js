@@ -367,7 +367,7 @@ app.put('/api/notes/:id', async (req, res) => {
       invalidateNoteCache(req.user.id, req.params.id);
       return res.json(note);
     }
-    const { title, content, is_pinned, category_ids } = req.body;
+    const { title, content, is_pinned, category_ids, planData } = req.body;
     const noteId = req.params.id;
     if (title !== undefined && !title.trim()) return res.status(400).json({ error: '标题不能为空' });
 
@@ -376,6 +376,7 @@ app.put('/api/notes/:id', async (req, res) => {
     if (title !== undefined) { updates.push('title = ?'); params.push(title.trim()); }
     if (content !== undefined) { updates.push('content = ?'); params.push(content); }
     if (is_pinned !== undefined) { updates.push('is_pinned = ?'); params.push(is_pinned); }
+    if (planData !== undefined) { updates.push('plan_data = ?'); params.push(JSON.stringify(planData)); }
 
     if (updates.length > 0) {
       params.push(noteId);

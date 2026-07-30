@@ -7,7 +7,7 @@
  *   - normalize / merge 为纯函数, 同时供 Prisma 模式与 pool 模式复用
  *   - 列不存在 (迁移还没跑) 时, 上层路由会 catch 降级, 不阻塞前端
  */
-const KNOWN_FEATURES = ['spacedRepetition', 'canvas', 'learningPath'];
+const KNOWN_FEATURES = ['spacedRepetition', 'canvas', 'ganttChart'];
 
 /** 把任意输入规整成 { features: {...} }, 未知键丢弃 */
 function normalizeSettings(raw) {

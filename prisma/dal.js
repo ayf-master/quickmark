@@ -26,6 +26,46 @@ async function findUserById(id, prisma) {
   return prisma.user.findUnique({ where: { id } });
 }
 
+/** 按 email 找用户 (找回密码用); 邮箱大小写不敏感 (MySQL 默认不区分) */
+async function findUserByEmail(email, prisma) {
+  if (!email || !email.trim()) return null;
+  return prisma.user.findUnique({ where: { email: email.trim() } });
+}
+
+/** 写入重置 token 哈希 + 过期时间 (SHA-256 哈希, 不存明文) */
+async function setPasswordResetToken(userId, tokenHash, expiresAt, prisma) {
+  return prisma.user.update({
+    where: { id: userId },
+    data: { passwordResetToken: tokenHash, passwordResetExpires: expiresAt }
+  });
+}
+
+/** 按 token 哈希找用户, 且未过期 (找回密码校验用) */
+async function findUserByResetToken(tokenHash, prisma) {
+  return prisma.user.findFirst({
+    where: {
+      passwordResetToken: tokenHash,
+      passwordResetExpires: { gt: new Date() }
+    }
+  });
+}
+
+/** 清空重置 token (用完即废, 防重放) */
+async function clearPasswordResetToken(userId, prisma) {
+  return prisma.user.update({
+    where: { id: userId },
+    data: { passwordResetToken: null, passwordResetExpires: null }
+  });
+}
+
+/** 更新密码哈希 */
+async function updatePassword(userId, passwordHash, prisma) {
+  return prisma.user.update({
+    where: { id: userId },
+    data: { passwordHash }
+  });
+}
+
 /** 创建用户 (注册用) */
 async function createUser({ username, email, passwordHash, displayName, role }, prisma) {
   // 唯一性检查
@@ -192,7 +232,7 @@ async function createNote(userId, { title, content, category_ids }, prisma) {
 }
 
 /** PUT /api/notes/:id — 更新笔记 */
-async function updateNote(userId, id, { title, content, is_pinned, category_ids }, prisma) {
+async function updateNote(userId, id, { title, content, is_pinned, category_ids, planData }, prisma) {
   const noteId = parseInt(id);
   if (title !== undefined && !title.trim()) {
     const err = new Error('标题不能为空');
@@ -210,6 +250,7 @@ async function updateNote(userId, id, { title, content, is_pinned, category_ids 
   if (title !== undefined) data.title = title.trim();
   if (content !== undefined) data.content = content;
   if (is_pinned !== undefined) data.isPinned = is_pinned;
+  if (planData !== undefined) data.planData = planData;
 
   // 分类替换需要事务: 删旧 + 插新 + 验证新分类归属
   if (category_ids !== undefined) {
@@ -419,7 +460,8 @@ function formatNote(note) {
     position: note.position || 0,
     created_at: note.createdAt,
     updated_at: note.updatedAt,
-    mastery: note.mastery ?? 0,   // 0-5, 复习越熟越高, 驱动知识图谱着色
+    mastery: note.mastery ?? 0,
+    planData: note.planData || null,
     category_ids: ids,
     category_names: names ? names.split(',') : []
   };
@@ -455,6 +497,11 @@ module.exports = {
   // 用户
   findUserByUsername,
   findUserById,
+  findUserByEmail,
+  setPasswordResetToken,
+  findUserByResetToken,
+  clearPasswordResetToken,
+  updatePassword,
   createUser,
   // 工具
   getDescendantIds,

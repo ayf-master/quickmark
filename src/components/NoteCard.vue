@@ -6,8 +6,13 @@
     role="button"
     :aria-label="'打开笔记: ' + (note.title || '无标题')"
     class="card cursor-pointer p-4 group"
-    :class="{ 'is-selected': isSelected }"
+    :class="{
+      'is-selected': isSelected,
+      'is-due-review': isDue
+    }"
     style="margin-bottom: 10px; position: relative;">
+    <!-- 到期复习标记 -->
+    <span v-if="isDue" class="due-badge" title="到期复习">🔄</span>
     <!-- 删除按钮 (hover 出现) -->
     <button
       @click.stop="confirmDelete"
@@ -54,7 +59,8 @@ import { store } from '@/store';
 
 const props = defineProps({
   note: { type: Object, required: true },
-  isSelected: { type: Boolean, default: false }
+  isSelected: { type: Boolean, default: false },
+  isDue: { type: Boolean, default: false }
 });
 
 const emit = defineEmits(['select', 'delete']);
@@ -100,5 +106,26 @@ function confirmDelete(e) {
 .card-delete-btn:hover {
   background: var(--color-danger-subtle, #FEE2E2);
   color: var(--color-danger, #DC2626);
+}
+
+/* ===== 间隔重复到期高亮 ===== */
+.due-badge {
+  position: absolute;
+  bottom: 8px;
+  right: 8px;
+  font-size: 14px;
+  line-height: 1;
+  z-index: 1;
+  opacity: 0;
+  transition: opacity .15s;
+  pointer-events: none;
+}
+.card:hover .due-badge,
+.card:focus-within .due-badge {
+  opacity: 1;
+}
+.is-due-review {
+  border-left: 3px solid var(--color-accent, #5b6ef5) !important;
+  background: var(--color-primary-subtle, rgba(91,110,245,0.04));
 }
 </style>

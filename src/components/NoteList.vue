@@ -97,6 +97,7 @@
           <NoteCard
             :note="note"
             :is-selected="store.editingNote && store.editingNote.id === note.id"
+            :is-due="features.dueNoteIds.includes(note.id)"
             @select="store.openNote(note)"
             @delete="store.deleteNoteFromList(note)" />
         </div>
@@ -159,10 +160,28 @@
 </template>
 
 <script setup>
-import { computed, ref, onMounted } from 'vue';
+import { computed, ref, onMounted, watch } from 'vue';
 import { store } from '@/store';
+import { features, refreshDueNotes } from '@/store/features.js';
 import API from '@/api/index.js';
 import NoteCard from '@/components/NoteCard.vue';
+
+// 间隔重复: 到期高亮使用 features.dueNoteIds (共享状态, 标记已复习后即时更新)
+
+watch(() => features.spacedRepetition, async (val) => {
+  if (val) {
+    // 先立即刷新 (卡片已存在时快速显示高亮)
+    refreshDueNotes();
+    // 再尝试注册新卡片 (幂等, 已有则跳过)
+    try { await API.enrollReview(); } catch (e) { /* 注册失败不影响已有卡片 */ }
+    // 800ms 后保底重刷, 确保 enroll 后的新卡片也纳入
+    setTimeout(() => refreshDueNotes(), 800);
+  } else {
+    features.dueNoteIds = [];
+    features.dueCardMap = {};
+    features.dueCount = 0;
+  }
+});
 
 const containerStyle = computed(() => {
   if (store.isDesktop) {
@@ -276,6 +295,7 @@ function dismissHint() {
 onMounted(() => {
   // 启动时不弹, 留到首次进入空态时自然出现
   // 配合 store.loadAll() 后 watch notes/categories 自动隐藏
+  refreshDueNotes();
 });
 </script>
 

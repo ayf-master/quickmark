@@ -48,8 +48,65 @@
         </div>
       </div>
 
-      <!-- 右侧: 收藏 / 编辑分类 / 删除 -->
-      <div class="flex items-center gap-1">
+      <!-- 右侧: 计划 / 收藏 / 编辑分类 / 删除 -->
+      <div class="flex items-center gap-1" style="flex-shrink:0;">
+        <!-- 📅 计划甘特表 -->
+        <div class="relative">
+          <button @click="planPickerVisible = !planPickerVisible"
+            class="btn btn-icon-sm btn-ghost"
+            :class="{ 'is-active': planActive || planPickerVisible }"
+            :title="planActive ? planStart + ' → ' + planEnd : '设为计划'">
+            <span style="font-size:14px;line-height:1;">📅</span>
+          </button>
+          <div v-if="planPickerVisible"
+            class="absolute right-0 top-full mt-2 z-50 p-3 rounded-xl shadow-xl"
+            style="background:var(--bg-elevated); border:1px solid var(--border-default); min-width:250px;"
+            @click.stop>
+            <div class="flex items-center justify-between mb-2">
+              <span class="text-xs font-semibold" style="color:var(--text-tertiary);">设定起止日期</span>
+              <button @click="removePlan" v-if="planActive" class="text-xs" style="color:var(--color-danger);">移除计划</button>
+            </div>
+            <div class="flex flex-col gap-1.5 mb-2">
+              <label class="flex items-center gap-2 text-xs" style="color:var(--text-secondary);">
+                <span style="width:32px;">开始</span>
+                <input type="date" v-model="planStart"
+                  class="flex-1 px-2 py-1 rounded text-xs"
+                  style="border:1px solid var(--border-default); background:var(--bg-input,var(--bg-panel)); color:var(--text-primary);" />
+              </label>
+              <label class="flex items-center gap-2 text-xs" style="color:var(--text-secondary);">
+                <span style="width:32px;">结束</span>
+                <input type="date" v-model="planEnd"
+                  class="flex-1 px-2 py-1 rounded text-xs"
+                  style="border:1px solid var(--border-default); background:var(--bg-input,var(--bg-panel)); color:var(--text-primary);" />
+              </label>
+            </div>
+            <div class="flex items-center gap-2 text-xs mb-2" style="color:var(--text-secondary);">
+              <span style="width:32px;">进度</span>
+              <div style="flex:1;display:flex;align-items:center;gap:6px;">
+                <input type="range" min="0" max="100" step="5" v-model.number="planProgress" class="plan-progress-slider" />
+                <span style="width:28px;text-align:right;font-variant-numeric:tabular-nums;">{{ planProgress }}%</span>
+              </div>
+            </div>
+            <div class="flex items-center gap-2 text-xs mb-3" style="color:var(--text-secondary);">
+              <span style="width:32px;">颜色</span>
+              <div class="flex gap-1.5 flex-wrap">
+                <button v-for="c in PLAN_COLORS" :key="c"
+                  @click="planColor = (planColor === c ? null : c)" class="plan-color-swatch"
+                  :class="{ active: planColor === c, none: !c }"
+                  :style="c ? { background: c } : {}" :title="c || '分类色'">
+                  <template v-if="!c">🎨</template>
+                </button>
+              </div>
+            </div>
+            <div class="flex gap-2">
+              <button @click="planPickerVisible = false" class="flex-1 py-1.5 rounded text-xs"
+                style="border:1px solid var(--border-default); color:var(--text-secondary); background:transparent;">取消</button>
+              <button @click="confirmPlan" class="flex-1 py-1.5 rounded text-xs font-semibold text-white"
+                style="background:var(--color-accent);">确定</button>
+            </div>
+          </div>
+        </div>
+        <!-- 收藏 -->
         <button class="btn btn-icon-sm btn-ghost"
           :class="{ 'is-active': store.editingNote && store.editingNote.is_pinned }"
           @click="store.togglePin()"
@@ -248,6 +305,7 @@
           <input ref="fileInput" type="file" accept="image/*" class="hidden" @change="onFileSelected" />
         </div>
 
+        <div class="md-toolbar-divider"></div>
         <div class="md-toolbar-spacer"></div>
 
         <button @click="store.editorPreviewVisible = !store.editorPreviewVisible"
@@ -307,6 +365,7 @@
           </button>
         </div>
       </div>
+
 <!-- 正文编辑区 -->
       <div class="px-4 sm:px-6 pb-6">
 
@@ -375,6 +434,15 @@
         <span>约 {{ store.readingTime }}阅读</span>
       </span>
       <span class="flex items-center gap-2">
+        <!-- 间隔重复: 到期笔记标记已复习 -->
+        <button v-if="isDueNote"
+          @click="markReviewed"
+          :disabled="markingReview"
+          class="review-mark-btn">
+          <span v-if="markingReview">⏳</span>
+          <span v-else>✓</span>
+          标记已复习
+        </button>
         <span class="w-1.5 h-1.5 rounded-full"
           :style="{ background: store.editorImageUploading ? 'var(--color-warning, #F59E0B)' : 'var(--color-success)' }"></span>
         {{ store.editorImageUploading ? '上传中...' : '自动保存' }}
@@ -431,11 +499,14 @@
 import { ref, computed, watch, onBeforeUnmount, nextTick, onMounted } from 'vue';
 import markdownit from 'markdown-it';
 import { store } from '@/store';
+import { features, refreshDueNotes, removeDueNote } from '@/store/features.js';
+import API from '@/api/index.js';
 import { uploadImageFile } from '@/utils/content';
 import wikiPlugin from '@/utils/markdown-it-wiki';
 import { renderAnnotations } from '@/utils/markdown-it-annotations';
 import { findNoteByTitle } from '@/utils/wiki-link';
 import BacklinkPanel from '@/components/BacklinkPanel.vue';
+// 计划甘特表: 数据存于 store.editPlanData, 不污染笔记正文
 
 const titleInput = ref(null);
 const contentInput = ref(null);
@@ -445,6 +516,84 @@ const categoryEditorVisible = ref(false);
 const linkInputText = ref('');
 const linkInputRef = ref(null);
 const annotationRefs = ref({});
+// 间隔重复: 使用 features.dueCardMap (共享状态, 与 NoteList 联动)
+const markingReview = ref(false);
+const isDueNote = computed(() => {
+  return store.editingNote?.id && features.dueCardMap[store.editingNote.id] != null;
+});
+
+async function markReviewed() {
+  if (!store.editingNote?.id) return;
+  const cardId = features.dueCardMap[store.editingNote.id];
+  if (!cardId) return;
+  markingReview.value = true;
+  try {
+    await API.markReviewed(cardId);
+    store.showToast('已标记为已复习');
+    // 从共享到期列表移除, NoteList 高亮即时消失
+    removeDueNote(store.editingNote.id);
+  } catch (e) {
+    store.showToast('标记失败: ' + (e.message || '未知错误'), 'error');
+  } finally {
+    markingReview.value = false;
+  }
+}
+
+watch(() => features.spacedRepetition, (val) => {
+  if (val) refreshDueNotes();
+  else { features.dueNoteIds = []; features.dueCardMap = {}; features.dueCount = 0; }
+});
+
+onMounted(() => {
+  if (features.spacedRepetition) refreshDueNotes();
+});
+
+// ===== 计划甘特表: 设为计划 (存于 store.editPlanData, 不污染正文) =====
+const PLAN_COLORS = [null, '#6366f1', '#3b82f6', '#06b6d4', '#10b981', '#f59e0b', '#f97316', '#ef4444', '#ec4899'];
+const planPickerVisible = ref(false);
+const planStart = ref('');
+const planEnd = ref('');
+const planProgress = ref(0);
+const planColor = ref(null);
+const planActive = computed(() => !!(planStart.value && planEnd.value));
+
+// 同步本地 ref ← store.editPlanData (浮层关闭时 / 初始加载时)
+function syncPlanFromStore() {
+  const p = store.editPlanData;
+  planStart.value = p?.start || '';
+  planEnd.value = p?.end || '';
+  planProgress.value = p?.progress ?? 0;
+  planColor.value = p?.color || null;
+}
+// 浮层打开时也从 store 同步 (丢弃未保存的改动)
+watch(planPickerVisible, (vis) => { if (vis) syncPlanFromStore(); });
+// store.editPlanData 变化时同步 (切换笔记等), 浮层打开时不覆盖用户编辑
+watch(() => store.editPlanData, (val) => { if (!planPickerVisible.value) syncPlanFromStore(); }, { immediate: true });
+
+function confirmPlan() {
+  if (!planStart.value || !planEnd.value) return;
+  store.editPlanData = {
+    start: planStart.value,
+    end: planEnd.value,
+    progress: planProgress.value,
+    color: planColor.value || undefined
+  };
+  planPickerVisible.value = false;
+  store.showToast('计划已保存');
+  store.saveCurrentNote();
+}
+
+function removePlan() {
+  store.editPlanData = null;
+  planStart.value = '';
+  planEnd.value = '';
+  planProgress.value = 0;
+  planColor.value = null;
+  planPickerVisible.value = false;
+  store.showToast('已移除计划');
+  store.saveCurrentNote();
+}
+
 // 图片全屏浏览（支持多张导航）
 const fullscreenImages = ref([]);
 const fullscreenIndex = ref(-1);
@@ -1354,6 +1503,8 @@ function mdInsertLink() {
   ta.dispatchEvent(new Event('input', { bubbles: true }));
 }
 
+// 间隔重复: 到期笔记在 NoteList 中高亮, 无需自测卡
+
 // ===== 粘贴处理 =====
 async function handlePaste(e) {
   if (store.editMode !== 'markdown') return;
@@ -1965,4 +2116,94 @@ button[aria-label="删除笔记"]:hover {
   -webkit-backdrop-filter: blur(4px);
   user-select: none;
 }
+
+        /* ===== 标记已复习按钮 ===== */
+        .review-mark-btn {
+          display: inline-flex;
+          align-items: center;
+          gap: 3px;
+          padding: 3px 8px;
+          font-size: 11px;
+          font-weight: 600;
+          border-radius: 6px;
+          border: 1px solid var(--color-accent);
+          color: var(--color-accent);
+          background: transparent;
+          cursor: pointer;
+          transition: all .15s;
+          white-space: nowrap;
+        }
+        .review-mark-btn:hover {
+          background: var(--color-accent);
+          color: #fff;
+        }
+        .review-mark-btn:disabled {
+          opacity: 0.5;
+          cursor: not-allowed;
+        }
+
+        /* ===== 计划甘特表: 右下角按钮 ===== */
+        .plan-footer-btn {
+          display: inline-flex; align-items: center; justify-content: center;
+          width: 22px; height: 22px; padding: 0;
+          border-radius: 4px; border: 1px solid transparent;
+          background: transparent; cursor: pointer;
+          font-size: 13px; line-height: 1;
+          transition: all .12s;
+        }
+        .plan-footer-btn:hover {
+          border-color: var(--border-default);
+          background: var(--bg-hover);
+        }
+        .plan-footer-btn.active {
+          border-color: var(--color-accent);
+          background: var(--color-accent-subtle,rgba(91,110,245,0.12));
+        }
+        /* ===== 计划甘特表: 浮层控件 ===== */
+        .plan-progress-slider {
+          flex: 1;
+          height: 4px;
+          -webkit-appearance: none;
+          appearance: none;
+          border-radius: 4px;
+          background: var(--border-default);
+          outline: none;
+          cursor: pointer;
+        }
+        .plan-progress-slider::-webkit-slider-thumb {
+          -webkit-appearance: none;
+          width: 14px;
+          height: 14px;
+          border-radius: 50%;
+          background: var(--color-accent);
+          border: 2px solid #fff;
+          box-shadow: 0 1px 3px rgba(0,0,0,0.2);
+          cursor: pointer;
+        }
+        .plan-progress-slider::-moz-range-thumb {
+          width: 14px;
+          height: 14px;
+          border-radius: 50%;
+          background: var(--color-accent);
+          border: 2px solid #fff;
+          box-shadow: 0 1px 3px rgba(0,0,0,0.2);
+          cursor: pointer;
+        }
+        .plan-color-swatch {
+          width: 20px;
+          height: 20px;
+          border-radius: 50%;
+          border: 2px solid transparent;
+          cursor: pointer;
+          padding: 0;
+          display: flex;
+          align-items: center;
+          justify-content: center;
+          font-size: 11px;
+          transition: all .12s;
+          background: var(--bg-hover);
+        }
+        .plan-color-swatch:hover { transform: scale(1.15); }
+        .plan-color-swatch.active { border-color: var(--text-primary); box-shadow: 0 0 0 1px #fff; }
+        .plan-color-swatch.none { font-size: 10px; }
 </style>
