@@ -34,14 +34,14 @@
         </div>
 
         <!-- Body: 左侧目录 + 右侧内容 -->
-        <div class="flex flex-1 min-h-0">
+        <div class="guide-body flex flex-1 min-h-0">
 
           <!-- 左侧目录 -->
-          <nav class="w-48 flex-shrink-0 border-r overflow-y-auto panel-scroll"
+          <nav class="guide-toc w-48 flex-shrink-0 border-r overflow-y-auto panel-scroll"
             style="border-color: var(--border-default);"
             aria-label="指南目录">
             <ul class="py-2">
-              <li v-for="ch in chapters" :key="ch.id">
+              <li v-for="ch in filteredChapters" :key="ch.id">
                 <a :href="`#guide-${ch.id}`"
                   class="flex items-center gap-2 px-4 py-2.5 text-sm transition-colors"
                   :class="activeChapter === ch.id ? 'guide-toc-active' : 'guide-toc-idle'"
@@ -58,7 +58,7 @@
 
           <!-- 右侧内容 (scroll) -->
           <div ref="contentRef"
-            class="flex-1 overflow-y-auto panel-scroll px-8 py-6"
+            class="guide-content flex-1 overflow-y-auto panel-scroll px-8 py-6"
             @scroll.passive="onContentScroll">
 
             <!-- 公告 (默认关闭, 大版本时启用) -->
@@ -69,7 +69,7 @@
             </div>
 
             <!-- 章节 -->
-            <article v-for="ch in chapters" :key="ch.id"
+            <article v-for="ch in filteredChapters" :key="ch.id"
               :id="`guide-${ch.id}`"
               class="mb-8 last:mb-4 scroll-mt-2">
 
@@ -105,8 +105,8 @@
                         {{ item.action.label }}
                       </button>
                     </div>
-                    <!-- 快捷键 (可选) -->
-                    <div v-if="item.keys && item.keys.length" class="flex items-center gap-1 mt-1 ml-[3.5rem]">
+                    <!-- 快捷键 (可选, 仅桌面显示) -->
+                    <div v-if="store.isDesktop && item.keys && item.keys.length" class="flex items-center gap-1 mt-1 ml-[3.5rem]">
                       <kbd v-for="(k, ki) in item.keys" :key="ki"
                         class="px-1.5 py-0.5 rounded text-xs font-mono"
                         style="background: var(--bg-input); border: 1px solid var(--border-default); color: var(--text-secondary);"
@@ -146,7 +146,11 @@ import { store } from '@/store';
 import { chapters, ANNOUNCEMENT, VERSION } from '@/data/guide-content.js';
 
 const contentRef = ref(null);
-const activeChapter = ref(chapters[0]?.id);
+// 触摸设备 (手机/平板) 没有键盘: 隐藏"快捷键"章节
+const filteredChapters = computed(() =>
+  store.isDesktop ? chapters : chapters.filter(ch => ch.id !== 'shortcut')
+);
+const activeChapter = ref(filteredChapters.value[0]?.id);
 
 // 公告样式 (按 type 走, 公告默认 enabled=false 不显示)
 const announcementStyle = computed(() => {
@@ -192,10 +196,10 @@ function runAction(actionId) {
 // 滚动时更新左侧目录高亮
 function onContentScroll(e) {
   const container = e.target;
-  const anchors = chapters.map(c => container.querySelector(`#guide-${c.id}`)).filter(Boolean);
+  const anchors = filteredChapters.value.map(c => container.querySelector(`#guide-${c.id}`)).filter(Boolean);
   if (anchors.length === 0) return;
   const threshold = container.scrollTop + 80;
-  let cur = chapters[0].id;
+  let cur = filteredChapters.value[0].id;
   for (const a of anchors) {
     if (a.offsetTop <= threshold) cur = a.id.replace('guide-', '');
     else break;
@@ -206,7 +210,7 @@ function onContentScroll(e) {
 // 打开时滚到顶部
 watch(() => store.userGuideVisible, async (open) => {
   if (open) {
-    activeChapter.value = chapters[0]?.id;
+    activeChapter.value = filteredChapters.value[0]?.id;
     await nextTick();
     if (contentRef.value) contentRef.value.scrollTop = 0;
   }
@@ -257,5 +261,35 @@ watch(() => store.userGuideVisible, async (open) => {
   background: var(--bg-input);
   border-radius: 3px;
   color: var(--color-accent);
+}
+
+/* 窄屏: 目录从左侧竖列改为顶部横向滚动标签条, 内容区独占宽度 */
+@media (max-width: 768px) {
+  .guide-body {
+    flex-direction: column;
+  }
+  .guide-toc {
+    width: 100%;
+    border-right: none;
+    border-bottom: 1px solid var(--border-default);
+    overflow-x: auto;
+    overflow-y: hidden;
+    display: flex;
+    flex-shrink: 0;
+  }
+  .guide-toc :deep(ul) {
+    display: flex;
+    padding: 0;
+  }
+  .guide-toc :deep(li) {
+    flex-shrink: 0;
+  }
+  .guide-toc :deep(a) {
+    padding: 10px 12px;
+    white-space: nowrap;
+  }
+  .guide-content {
+    padding: 16px;
+  }
 }
 </style>

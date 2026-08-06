@@ -1,6 +1,6 @@
 <template>
-  <!-- 移动端遮罩 -->
-  <div v-if="store.isCompact"
+  <!-- 手机遮罩 (平板/桌面侧栏常显, 不需要遮罩) -->
+  <div v-if="store.isMobile"
     class="drawer-overlay"
     :class="{ open: store.mobileDrawerOpen }"
     @click="store.mobileDrawerOpen = false"
@@ -13,7 +13,7 @@
     :style="sidebarStyle"
     role="navigation"
     aria-label="侧边导航"
-    :aria-modal="store.isCompact ? 'true' : 'false'">
+    :aria-modal="store.isMobile ? 'true' : 'false'">
     <!-- 顶部工具栏: 折叠/展开按钮 (避免与 AppHeader 顶部 logo 重复) -->
     <div v-if="store.isDesktop" class="px-3 py-3 flex-shrink-0 flex justify-end"
       style="border-bottom: 1px solid var(--border-default);">
@@ -32,7 +32,7 @@
     </div>
 
     <!-- 搜索分类 (桌面+移动端) -->
-    <div class="px-4 flex-shrink-0" :class="store.isCompact ? 'py-4' : 'py-3'"
+    <div class="px-4 flex-shrink-0" :class="store.isMobile ? 'py-4' : 'py-3'"
       style="border-bottom: 1px solid var(--border-default);">
       <div class="relative">
         <input type="text"
@@ -120,7 +120,7 @@
           <line x1="14" y1="13" x2="11" y2="17" stroke-width="1.5"/>
         </svg>
         知识图谱
-        <span class="text-xs ml-auto" style="color: var(--text-tertiary);">⌘G</span>
+        <span v-if="store.isDesktop" class="text-xs ml-auto" style="color: var(--text-tertiary);">⌘G</span>
       </button>
     </div>
 
@@ -136,18 +136,18 @@ import CategoryTreeNode from '@/components/CategoryTreeNode.vue';
 import ExtensionSlot from '@/components/ExtensionSlot.vue';
 
 const sidebarClass = computed(() => ({
-  'sidebar-desktop': store.isDesktop,
-  'sidebar-drawer': store.isCompact,
-  'drawer-open': store.isCompact && store.mobileDrawerOpen
+  'sidebar-desktop': store.isDesktop || store.isTablet,
+  'sidebar-drawer': store.isMobile,
+  'drawer-open': store.isMobile && store.mobileDrawerOpen
 }));
 
 const sidebarStyle = computed(() => {
-  if (store.isDesktop) {
+  if (store.isDesktop || store.isTablet) {
     // 每展开一级, 侧边栏整体加宽, 让右侧 (笔记列表/编辑器) 一起右移
-    // 步进 18px: 够放下名字+计数+"+"号, 不会过宽
-    const step = 18;
+    // 步进: 桌面 18px, 平板 14px (平板空间更紧)
+    const step = store.isTablet ? 14 : 18;
     const extra = store.maxExpandedDepth * step;
-    const baseWidth = 'var(--sidebar-width)';
+    const baseWidth = store.isTablet ? '200px' : 'var(--sidebar-width)';
     const finalWidth = store.sidebarCollapsed
       ? '0px'
       : `calc(${baseWidth} + ${extra}px)`;

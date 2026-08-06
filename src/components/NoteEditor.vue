@@ -1,6 +1,6 @@
 <template>
   <section class="flex flex-col h-full fade-in-up"
-    :class="{ 'editor-fullscreen': store.isCompact }"
+    :class="{ 'editor-fullscreen': store.isMobile }"
     :style="panelStyle"
     role="region"
     aria-label="笔记编辑器">
@@ -12,7 +12,7 @@
 
       <!-- 左侧: 返回 / 模式切换 -->
       <div class="flex items-center gap-3 min-w-0">
-        <button v-if="store.isCompact"
+        <button v-if="store.isMobile"
           class="btn btn-icon-sm btn-ghost flex-shrink-0"
           @click="store.closeEditor()"
           aria-label="返回列表">
@@ -59,7 +59,7 @@
             <span style="font-size:14px;line-height:1;">📅</span>
           </button>
           <div v-if="planPickerVisible"
-            class="absolute right-0 top-full mt-2 z-50 p-3 rounded-xl shadow-xl"
+            class="plan-picker absolute right-0 top-full mt-2 z-50 p-3 rounded-xl shadow-xl"
             style="background:var(--bg-elevated); border:1px solid var(--border-default); min-width:250px;"
             @click.stop>
             <div class="flex items-center justify-between mb-2">
@@ -130,7 +130,7 @@
           </button>
           <!-- 分类编辑浮层 -->
           <div v-if="categoryEditorVisible"
-            class="absolute right-0 top-full mt-2 z-50 p-3 rounded-xl shadow-xl"
+            class="cat-picker absolute right-0 top-full mt-2 z-50 p-3 rounded-xl shadow-xl"
             style="background: var(--bg-elevated); border: 1px solid var(--border-default); min-width: 200px;">
             <div class="flex items-center justify-between mb-2">
               <span class="text-xs font-semibold" style="color: var(--text-tertiary);">编辑分类</span>
@@ -168,8 +168,8 @@
       </div>
     </header>
 
-    <!-- 编辑器主体 -->
-    <div class="flex-1 panel-scroll" v-if="store.editingNote">
+    <!-- 编辑器主体 (新手引导: 手机端高亮此区域而非整个全屏编辑器) -->
+    <div class="flex-1 panel-scroll" v-if="store.editingNote" data-tour="editor-body">
 
       <!-- 标题 -->
       <div class="px-4 sm:px-6 pt-5 pb-3">
@@ -454,6 +454,8 @@
       <div v-if="fullscreenImage"
         class="img-fullscreen-overlay"
         @click.self="closeFullscreen"
+        @touchstart.passive="onFullscreenTouchStart"
+        @touchend.passive="onFullscreenTouchEnd"
         @keydown.escape="closeFullscreen"
         @keydown.left="goFullscreenPrev"
         @keydown.right="goFullscreenNext"
@@ -476,7 +478,7 @@
           </svg>
         </button>
 
-        <img :src="fullscreenImage" class="img-fullscreen-content" alt="全屏图片">
+        <img :src="fullscreenImage" :key="fullscreenIndex" class="img-fullscreen-content" alt="全屏图片">
 
         <!-- 下一张 -->
         <button v-if="fullscreenIndex < fullscreenImages.length - 1"
@@ -615,6 +617,27 @@ function closeFullscreen() {
 }
 function goFullscreenByIndex(idx) {
   if (idx >= 0 && idx < fullscreenImages.value.length) fullscreenIndex.value = idx;
+}
+
+// 移动端全屏浏览: 左右滑动切换图片 (桌面端保留按钮/键盘)
+const fullscreenTouchX = ref(null);
+const fullscreenTouchY = ref(null);
+const FULLSCREEN_SWIPE_THRESHOLD = 50; // px
+function onFullscreenTouchStart(e) {
+  const t = e.changedTouches[0];
+  fullscreenTouchX.value = t.clientX;
+  fullscreenTouchY.value = t.clientY;
+}
+function onFullscreenTouchEnd(e) {
+  if (fullscreenTouchX.value == null) return;
+  const dx = e.changedTouches[0].clientX - fullscreenTouchX.value;
+  const dy = e.changedTouches[0].clientY - fullscreenTouchY.value;
+  fullscreenTouchX.value = null;
+  fullscreenTouchY.value = null;
+  if (Math.abs(dx) < FULLSCREEN_SWIPE_THRESHOLD) return;   // 位移太小不算滑动
+  if (Math.abs(dy) > Math.abs(dx)) return;                  // 垂直为主的滑动忽略, 不干扰滚动
+  if (dx < 0) goFullscreenNext();
+  else goFullscreenPrev();
 }
 // 从 Markdown 原文提取所有图片 URL
 function extractImageUrls(markdown) {
@@ -823,7 +846,7 @@ if (typeof markdownit === 'function') {
 }
 
 const panelStyle = computed(() => {
-  if (store.isDesktop) {
+  if (store.isDesktop || store.isTablet) {
     return { flex: '1', background: 'var(--bg-panel)', minWidth: '0' };
   }
   return { background: 'var(--bg-panel)' };
@@ -1777,6 +1800,15 @@ document.addEventListener('keydown', onKeydown);
   background: var(--color-accent-subtle, rgba(91,141,239,0.12));
   color: var(--color-accent);
 }
+/* 触摸设备: 28px 按钮手指难命中, 加大到 ~38px (工具栏 flex-wrap 会自动换行) */
+@media (hover: none) {
+  .md-tool {
+    min-width: 38px;
+    height: 34px;
+    padding: 0 8px;
+    font-size: 14px;
+  }
+}
 
 /* ===== Markdown Editor + Preview ===== */
 .md-pane {
@@ -1941,7 +1973,8 @@ document.addEventListener('keydown', onKeydown);
   border: 1px solid var(--border-default);
   padding: 6px 10px;
 }
-@media (max-width: 768px) {
+/* 平板竖屏时编辑器很窄 (721px 屏只剩 ~260px), 双栏并排不可用, 折叠为单列 */
+@media (max-width: 1024px) {
   .md-pane.with-preview { flex-direction: column; }
   .md-pane.with-preview .md-editor,
   .md-pane.with-preview .md-preview {
@@ -2100,6 +2133,32 @@ button[aria-label="删除笔记"]:hover {
 }
 .img-fullscreen-nav-next {
   right: 24px;
+}
+/* 移动端: 左右 48px 的大按钮会遮挡图片, 隐藏改用左右滑动切换 */
+@media (max-width: 1024px) {
+  .img-fullscreen-nav {
+    display: none;
+  }
+  /* 切换图片时淡入, 提示滑动已生效 */
+  .img-fullscreen-overlay .img-fullscreen-content {
+    animation: fadeIn 0.18s ease;
+  }
+}
+
+/* 手机: 编辑器工具栏的下拉浮层锚在右侧按钮上, 窄屏会向左溢出屏幕;
+   改为屏幕居中弹层, 超长可滚动 (平板 721-1024px 空间足够, 保持下拉) */
+@media (max-width: 720px) {
+  .plan-picker,
+  .cat-picker {
+    position: fixed;
+    left: 12px;
+    right: 12px;
+    top: 50%;
+    transform: translateY(-50%);
+    min-width: 0;
+    max-height: calc(100vh - 48px);
+    overflow-y: auto;
+  }
 }
 .img-fullscreen-counter {
   position: absolute;

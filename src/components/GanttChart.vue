@@ -27,8 +27,9 @@
 
         <!-- 甘特图主体 -->
         <div v-else class="gantt-body">
-          <!-- 左侧标签列 -->
-          <div class="gantt-labels" ref="labelsRef" @scroll="syncLabelsScroll">
+          <!-- 左侧标签列 (宽度可拖拽调整, 手机默认更窄) -->
+          <div class="gantt-labels" ref="labelsRef" @scroll="syncLabelsScroll"
+            :style="{ width: labelWidth + 'px' }">
             <div class="gantt-labels-header">笔记</div>
             <template v-for="g in groups" :key="g.id">
               <div class="gantt-group-label" @click="toggleCollapse(g.id)">
@@ -39,6 +40,11 @@
               <div v-for="n in g.notes" :key="n.id" v-show="!isCollapsed(g.id)"
                 class="gantt-task-label"
                 :class="{ active: store.editingNote?.id === n.id, dragging: dragReorder?.id === n.id }"
+                :data-note-id="n.id"
+                @touchstart.passive="onTaskTouchStart($event, n)"
+                @touchmove="onTaskTouchMove"
+                @touchend="onTaskTouchEnd"
+                @touchcancel="onTaskTouchCancel"
                 draggable="true"
                 @dragstart="onReorderStart($event, n, g.id)"
                 @dragover.prevent="onReorderOver($event, n, g.id)"
@@ -51,6 +57,11 @@
               </div>
             </template>
           </div>
+
+          <!-- 宽度调节条 -->
+          <div class="gantt-label-resizer"
+            @pointerdown.stop.prevent="onResizerDown"
+            title="拖拽调整宽度"></div>
 
           <!-- 右侧时间轴区域 (水平滚动) -->
           <div class="gantt-scroll" ref="scrollRef" @scroll="syncTimelineScroll">
@@ -95,17 +106,17 @@
                       :title="n.title + ' (' + n.plan.start + ' → ' + n.plan.end + ', ' + n.plan.progress + '%)'">
                       <!-- 左侧拖拽柄 -->
                       <div class="gantt-bar-resize gantt-bar-resize-l"
-                        @mousedown.stop.prevent="startDrag($event, n, 'resize-l')"></div>
+                        @pointerdown.stop.prevent="startDrag($event, n, 'resize-l')"></div>
                       <!-- 中间拖拽 -->
                       <div class="gantt-bar-body"
-                        @mousedown.stop.prevent="startDrag($event, n, 'move')"></div>
+                        @pointerdown.stop.prevent="startDrag($event, n, 'move')"></div>
                       <!-- 进度条 -->
                       <span class="gantt-bar-progress" :style="{ width: (n.plan.progress || 0) + '%' }"></span>
                       <!-- 标题 -->
                       <span v-if="barWidthPx(n) > 50" class="gantt-bar-text">{{ n.title }}</span>
                       <!-- 右侧拖拽柄 -->
                       <div class="gantt-bar-resize gantt-bar-resize-r"
-                        @mousedown.stop.prevent="startDrag($event, n, 'resize-r')"></div>
+                        @pointerdown.stop.prevent="startDrag($event, n, 'resize-r')"></div>
                     </div>
                   </div>
                 </template>
@@ -286,6 +297,22 @@ function barWidthPx(note) {
 
 // ===== 拖拽: 重排顺序 =====
 const dragReorder = ref(null); // { id, fromGroup, lastOverId }
+
+// 核心重排: 把 fromId 移到 toId 的位置, 桌面 dragover / 触摸移动共用
+function moveNoteBefore(fromId, toId) {
+  if (!fromId || !toId || fromId === toId) return;
+  const fromIdx = store.notes.findIndex(n => n.id === fromId);
+  const toIdx = store.notes.findIndex(n => n.id === toId);
+  if (fromIdx < 0 || toIdx < 0) return;
+  const sorted = [...store.notes];
+  const [moved] = sorted.splice(fromIdx, 1);
+  const insertAt = fromIdx < toIdx ? toIdx - 1 : toIdx;
+  sorted.splice(insertAt, 0, moved);
+  sorted.forEach((n, i) => { n.position = i; });
+  store.notes = sorted;
+  store.noteListVersion = Date.now();
+}
+
 function onReorderStart(e, note, gid) {
   dragReorder.value = { id: note.id, fromGroup: gid, lastOverId: null };
   e.dataTransfer.effectAllowed = 'move';
@@ -296,21 +323,95 @@ function onReorderOver(e, note, gid) {
   // 避免同一目标重复重排 (dragover 高频触发)
   if (dragReorder.value.lastOverId === note.id) return;
   dragReorder.value.lastOverId = note.id;
-  const fromIdx = store.notes.findIndex(n => n.id === dragReorder.value.id);
-  const toIdx = store.notes.findIndex(n => n.id === note.id);
-  if (fromIdx < 0 || toIdx < 0) return;
-  const sorted = [...store.notes];
-  const [moved] = sorted.splice(fromIdx, 1);
-  const insertAt = fromIdx < toIdx ? toIdx - 1 : toIdx;
-  sorted.splice(insertAt, 0, moved);
-  sorted.forEach((n, i) => { n.position = i; });
-  store.notes = sorted;
-  store.noteListVersion = Date.now();
+  moveNoteBefore(dragReorder.value.id, note.id);
 }
 function onReorderEnd() {
   if (dragReorder.value) {
     API.reorderNotes(store.notes.map(n => n.id)).catch(() => {});
   }
+  dragReorder.value = null;
+}
+
+// ===== 触摸长按重排 (手机/平板, HTML5 draggable 不支持触摸) =====
+let touchReorder = null; // { id, startY, el, activated, timer }
+
+function clearTaskTargets() {
+  document.querySelectorAll('.gantt-task-label.gantt-task-target').forEach(el => el.classList.remove('gantt-task-target'));
+}
+
+function onTaskTouchStart(e, note) {
+  if (e.touches.length !== 1 || dragReorder.value) return;
+  const t = e.touches[0];
+  touchReorder = { id: note.id, startY: t.clientY, el: e.currentTarget, activated: false, timer: null };
+  touchReorder.timer = setTimeout(() => {
+    touchReorder.activated = true;
+    dragReorder.value = { id: touchReorder.id, fromGroup: null, lastOverId: null };
+    touchReorder.el.classList.add('gantt-task-touch');
+  }, 400);
+}
+
+function onTaskTouchMove(e) {
+  if (!touchReorder) return;
+  if (!dragReorder.value) {
+    // 长按未激活: 移动超过阈值视为滚动, 取消长按
+    if (e.touches.length && Math.abs(e.touches[0].clientY - touchReorder.startY) > 10) {
+      clearTimeout(touchReorder.timer);
+      touchReorder = null;
+    }
+    return;
+  }
+  // 拖拽中: 阻止滚动, 行跟随手指, 实时重排
+  e.preventDefault();
+  const t = e.touches[0];
+  const shift = t.clientY - touchReorder.startY;
+  touchReorder.el.style.transform = `translateY(${shift}px)`;
+  const fingerY = t.clientY;
+  let target = null;
+  for (const row of document.querySelectorAll('.gantt-task-label')) {
+    const r = row.getBoundingClientRect();
+    if (fingerY >= r.top && fingerY <= r.bottom) {
+      const nid = Number(row.dataset.noteId);
+      if (nid && nid !== dragReorder.value.id) target = nid;
+      break;
+    }
+  }
+  clearTaskTargets();
+  if (target) {
+    document.querySelector(`.gantt-task-label[data-note-id="${target}"]`)?.classList.add('gantt-task-target');
+    if (dragReorder.value.lastOverId !== target) {
+      dragReorder.value.lastOverId = target;
+      moveNoteBefore(dragReorder.value.id, target);
+    }
+  }
+}
+
+function onTaskTouchEnd() {
+  if (!touchReorder) return;
+  clearTimeout(touchReorder.timer);
+  const wasDragging = touchReorder.activated;
+  touchReorder.el.classList.remove('gantt-task-touch');
+  touchReorder.el.style.transform = '';
+  clearTaskTargets();
+  touchReorder = null;
+  if (dragReorder.value) {
+    const reordered = dragReorder.value;
+    dragReorder.value = null;
+    if (wasDragging) {
+      // 长按松手后系统会补发 click, 会误触发"打开笔记", 这里吞掉它
+      const swallowClick = (ev) => { ev.preventDefault(); ev.stopPropagation(); document.removeEventListener('click', swallowClick, true); };
+      document.addEventListener('click', swallowClick, true);
+      API.reorderNotes(store.notes.map(n => n.id)).catch(() => {});
+    }
+  }
+}
+
+function onTaskTouchCancel() {
+  if (!touchReorder) return;
+  clearTimeout(touchReorder.timer);
+  touchReorder.el.classList.remove('gantt-task-touch');
+  touchReorder.el.style.transform = '';
+  clearTaskTargets();
+  touchReorder = null;
   dragReorder.value = null;
 }
 
@@ -329,8 +430,8 @@ function startDrag(e, note, type) {
     origStart: new Date(origStart),
     origEnd: new Date(origEnd)
   };
-  document.addEventListener('mousemove', onDragDateMove);
-  document.addEventListener('mouseup', onDragDateEnd);
+  document.addEventListener('pointermove', onDragDateMove);
+  document.addEventListener('pointerup', onDragDateEnd);
 }
 
 function onDragDateMove(e) {
@@ -365,8 +466,8 @@ function onDragDateMove(e) {
 }
 
 async function onDragDateEnd() {
-  document.removeEventListener('mousemove', onDragDateMove);
-  document.removeEventListener('mouseup', onDragDateEnd);
+  document.removeEventListener('pointermove', onDragDateMove);
+  document.removeEventListener('pointerup', onDragDateEnd);
   if (!dragDate.value) return;
   const dd = dragDate.value;
   const note = notesWithPlan.value.find(n => n.id === dd.noteId);
@@ -388,6 +489,34 @@ async function onDragDateEnd() {
     }
   }
   dragDate.value = null;
+}
+
+// ===== 左侧标签列宽度 (可拖拽调整, 记忆到 localStorage; 手机默认更窄) =====
+const LABEL_W_KEY = 'quickmark-gantt-label-w';
+function initLabelWidth() {
+  try {
+    const v = parseInt(localStorage.getItem(LABEL_W_KEY), 10);
+    if (v >= 120 && v <= 420) return v;
+  } catch (e) { /* ignore */ }
+  return store.isMobile ? 140 : 210;
+}
+const labelWidth = ref(initLabelWidth());
+let resizerStartX = 0;
+let resizerStartW = 0;
+
+function onResizerDown(e) {
+  resizerStartX = e.clientX;
+  resizerStartW = labelWidth.value;
+  document.addEventListener('pointermove', onResizerMove);
+  document.addEventListener('pointerup', onResizerUp);
+}
+function onResizerMove(e) {
+  labelWidth.value = Math.min(420, Math.max(120, resizerStartW + (e.clientX - resizerStartX)));
+}
+function onResizerUp() {
+  document.removeEventListener('pointermove', onResizerMove);
+  document.removeEventListener('pointerup', onResizerUp);
+  try { localStorage.setItem(LABEL_W_KEY, String(labelWidth.value)); } catch (e) { /* ignore */ }
 }
 
 // ===== 同步左右滚动 =====
@@ -481,8 +610,26 @@ onBeforeUnmount(() => {
 
 /* ===== 左侧标签列 ===== */
 .gantt-labels {
-  flex-shrink: 0; width: 210px; overflow-y: auto; overflow-x: hidden;
+  flex-shrink: 0; overflow-y: auto; overflow-x: hidden;
   border-right: 1px solid var(--border-default); background: var(--bg-panel);
+}
+/* 宽度调节条 (夹在标签列与时间轴之间) */
+.gantt-label-resizer {
+  width: 6px;
+  cursor: col-resize;
+  background: transparent;
+  border-left: 1px solid var(--border-default);
+  flex-shrink: 0;
+  touch-action: none;
+  transition: background 0.15s;
+}
+.gantt-label-resizer:hover,
+.gantt-label-resizer:active {
+  background: var(--color-accent-subtle, rgba(91,141,239,0.15));
+}
+/* 移动端: 6px 太窄难触摸, 加宽 */
+@media (max-width: 720px) {
+  .gantt-label-resizer { width: 12px; }
 }
 .gantt-labels::-webkit-scrollbar { width: 4px; }
 .gantt-labels-header {
@@ -516,6 +663,24 @@ onBeforeUnmount(() => {
 .gantt-task-label:hover { background: var(--bg-hover); }
 .gantt-task-label.active { background: var(--color-primary-subtle); color: var(--color-primary); font-weight: 600; }
 .gantt-task-label.dragging { opacity: 0.4; }
+/* 触摸长按重排: 被拖行浮起 + 目标行高亮 */
+.gantt-task-touch {
+  opacity: 0.85 !important;
+  box-shadow: var(--shadow-md, 0 4px 16px rgba(0,0,0,0.15)) !important;
+  position: relative;
+  z-index: 5;
+}
+.gantt-task-target {
+  outline: 2px solid var(--color-primary, #5b6ef5);
+  outline-offset: -2px;
+}
+@media (hover: none) {
+  .gantt-labels {
+    -webkit-touch-callout: none;
+    -webkit-user-select: none;
+    user-select: none;
+  }
+}
 .gantt-drag-handle {
   cursor: grab; color: var(--text-tertiary); font-size: 11px;
   line-height: 1; padding: 0 2px; flex-shrink: 0; user-select: none;
@@ -587,6 +752,8 @@ onBeforeUnmount(() => {
   position: absolute; top: 4px; bottom: 4px; border-radius: 4px;
   display: flex; align-items: center; overflow: visible; cursor: default;
   opacity: 0.85; min-width: 4px;
+  /* 触摸拖拽时禁止浏览器默认滚动, 手势交给拖拽逻辑 */
+  touch-action: none;
 }
 .gantt-lane-row:hover .gantt-bar { opacity: 1; box-shadow: 0 2px 8px rgba(0,0,0,0.18); }
 .gantt-bar-body {
@@ -610,6 +777,10 @@ onBeforeUnmount(() => {
 .gantt-bar-resize:hover { background: rgba(255,255,255,0.3); }
 .gantt-bar-resize-l { left: 0; border-radius: 4px 0 0 4px; }
 .gantt-bar-resize-r { right: 0; border-radius: 0 4px 4px 0; }
+/* 移动端: 6px 拖拽柄手指难命中, 加宽 */
+@media (max-width: 1024px) {
+  .gantt-bar-resize { width: 14px; }
+}
 
 /* ===== 今日线 ===== */
 .gantt-today {

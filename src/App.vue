@@ -21,12 +21,12 @@
       <div class="app-layout flex-1 min-h-0">
         <Sidebar />
 
-        <!-- 笔记列表: 桌面端始终显示; 移动端编辑时隐藏 -->
-        <NoteList v-show="!store.isCompact || !store.editingNote" />
+        <!-- 笔记列表: 桌面/平板始终显示; 手机编辑时隐藏 -->
+        <NoteList v-show="!store.isMobile || !store.editingNote" />
 
-        <!-- 编辑器: 桌面端始终显示(空态时占位); 移动端仅编辑时显示 -->
+        <!-- 编辑器: 桌面/平板始终显示(空态时占位); 手机仅编辑时显示 -->
         <NoteEditor v-if="store.editingNote" v-show="store.isDesktop || store.isCompact" />
-        <div v-else-if="store.isDesktop"
+        <div v-else-if="store.isDesktop || store.isTablet"
           class="flex-1 flex flex-col items-center justify-center"
           style="background: var(--bg-panel); color: var(--text-tertiary);">
           <svg class="w-20 h-20 mb-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"

@@ -41,8 +41,8 @@
           </svg>
         </button>
       </div>
-      <!-- 笔记搜索 (模糊匹配标题+内容, 桌面端显示) -->
-      <div v-if="store.isDesktop" class="relative mt-3">
+      <!-- 笔记搜索 (模糊匹配标题+内容, 桌面/平板显示; 手机在顶部栏搜索) -->
+      <div v-if="store.isDesktop || store.isTablet" class="relative mt-3">
         <input type="text"
           v-model="store.searchQuery"
           @input="store.onSearchInput()"
@@ -87,6 +87,12 @@
       <template v-else-if="Array.isArray(store.filteredNotes) && store.filteredNotes.length > 0">
         <div v-for="(note, idx) in store.filteredNotes"
           :key="note.id"
+          :data-id="note.id"
+          ref="noteEls"
+          @touchstart.passive="onNoteTouchStart($event, note.id)"
+          @touchmove="onNoteTouchMove"
+          @touchend="onNoteTouchEnd"
+          @touchcancel="onNoteTouchCancel"
           draggable="true"
           @dragstart="onNoteDragStart($event, note.id)"
           @dragover.prevent="onNoteDragOver($event, note.id)"
@@ -115,7 +121,7 @@
           </svg>
           <p class="text-sm mb-1" style="color: var(--text-secondary);"
             v-text="emptyText"></p>
-          <p v-if="!store.searchQuery && !store.showPinnedOnly" class="text-xs mb-4"
+          <p v-if="!store.searchQuery && !store.showPinnedOnly && store.isDesktop" class="text-xs mb-4"
             style="color: var(--text-tertiary);">
             按 Alt + N 新建第一篇笔记 (需选分类)
           </p>
@@ -184,10 +190,12 @@ watch(() => features.spacedRepetition, async (val) => {
 });
 
 const containerStyle = computed(() => {
-  if (store.isDesktop) {
+  if (store.isDesktop || store.isTablet) {
     const collapsed = store.noteListCollapsed;
+    // 平板空间紧, 列表宽度压缩到 260px
+    const width = store.isTablet ? '260px' : 'var(--list-width)';
     return {
-      width: collapsed ? '0px' : 'var(--list-width)',
+      width: collapsed ? '0px' : width,
       flexShrink: '0',
       position: 'relative',
       overflow: 'visible',
@@ -206,8 +214,9 @@ const containerStyle = computed(() => {
 // ===== 拖拽排序 =====
 const dragNoteId = ref(null);
 const dragOverNoteId = ref(null);
+const noteEls = ref([]);
 
-function onNoteDragStart(e, id) {
+async function onNoteDragStart(e, id) {
   dragNoteId.value = id;
   e.dataTransfer.effectAllowed = 'move';
   e.dataTransfer.setData('application/x-quickmark-note', String(id));
@@ -219,11 +228,9 @@ function onNoteDragOver(e, id) {
   }
 }
 
-async function onNoteDrop(e, id) {
-  const fromId = dragNoteId.value;
-  const toId = id;
-  dragOverNoteId.value = null;
-  if (!fromId || fromId === toId) return;
+// 核心排序逻辑: 桌面 drop / 触摸放置共用
+async function reorderNotes(fromId, toId) {
+  if (!fromId || !toId || fromId === toId) return;
   // 从 store 取出笔记列表，重新排序
   const sorted = store.notes.slice(); // 浅拷贝
   const fromIdx = sorted.findIndex(n => n.id === fromId);
@@ -244,7 +251,96 @@ async function onNoteDrop(e, id) {
   }
 }
 
+async function onNoteDrop(e, id) {
+  const fromId = dragNoteId.value;
+  const toId = id;
+  dragOverNoteId.value = null;
+  dragNoteId.value = null;
+  await reorderNotes(fromId, toId);
+}
+
 function onNoteDragEnd() {
+  dragNoteId.value = null;
+  dragOverNoteId.value = null;
+}
+
+// ===== 触摸长按拖拽排序 (手机/平板, HTML5 draggable 不支持触摸) =====
+const TOUCH_LONG_PRESS_MS = 400;
+const touchDragState = { timer: null, noteId: null, startY: 0, el: null, activated: false };
+
+function onNoteTouchStart(e, noteId) {
+  if (e.touches.length !== 1 || dragNoteId.value) return;
+  const t = e.touches[0];
+  touchDragState.noteId = noteId;
+  touchDragState.startY = t.clientY;
+  touchDragState.el = e.currentTarget;
+  touchDragState.activated = false;
+  touchDragState.timer = setTimeout(() => {
+    touchDragState.activated = true;
+    dragNoteId.value = noteId;
+    touchDragState.el?.classList.add('touch-lifted');
+  }, TOUCH_LONG_PRESS_MS);
+}
+
+function onNoteTouchMove(e) {
+  const st = touchDragState;
+  if (!dragNoteId.value) {
+    // 长按未激活: 手指移动超过阈值视为滚动, 取消长按
+    if (st.noteId != null && e.touches.length) {
+      if (Math.abs(e.touches[0].clientY - st.startY) > 10) {
+        clearTimeout(st.timer);
+        st.noteId = null;
+      }
+    }
+    return;
+  }
+  // 拖拽中: 阻止页面滚动, 卡片跟随手指, 实时计算目标行
+  e.preventDefault();
+  const t = e.touches[0];
+  const shift = t.clientY - st.startY;
+  if (st.el) st.el.style.transform = `translateY(${shift}px)`;
+  const fingerY = t.clientY;
+  let target = null;
+  for (const el of noteEls.value) {
+    if (!el) continue;
+    const r = el.getBoundingClientRect();
+    if (fingerY >= r.top && fingerY <= r.bottom) { target = el.dataset.id; break; }
+  }
+  dragOverNoteId.value = target && target !== String(dragNoteId.value) ? Number(target) : null;
+}
+
+function onNoteTouchEnd() {
+  const st = touchDragState;
+  clearTimeout(st.timer);
+  const fromId = dragNoteId.value;
+  const toId = dragOverNoteId.value;
+  if (st.el) {
+    st.el.classList.remove('touch-lifted');
+    st.el.style.transform = '';
+  }
+  const wasDragging = st.activated;
+  st.noteId = null;
+  st.el = null;
+  st.activated = false;
+  dragNoteId.value = null;
+  dragOverNoteId.value = null;
+  if (wasDragging && fromId) {
+    // 长按松手后系统会补发 click, 会误触发"打开笔记", 这里吞掉它
+    const swallowClick = (ev) => { ev.preventDefault(); ev.stopPropagation(); document.removeEventListener('click', swallowClick, true); };
+    document.addEventListener('click', swallowClick, true);
+    if (toId) reorderNotes(fromId, toId);
+  }
+}
+
+function onNoteTouchCancel() {
+  clearTimeout(touchDragState.timer);
+  if (touchDragState.el) {
+    touchDragState.el.classList.remove('touch-lifted');
+    touchDragState.el.style.transform = '';
+  }
+  touchDragState.noteId = null;
+  touchDragState.el = null;
+  touchDragState.activated = false;
   dragNoteId.value = null;
   dragOverNoteId.value = null;
 }
@@ -330,6 +426,22 @@ onMounted(() => {
 .note-dragging {
   opacity: 0.4;
   transition: opacity 0.15s;
+}
+/* 触摸长按拖拽: 被拖卡片浮起 (跟随手指的位移在 JS 里以 transform 设置) */
+.touch-lifted {
+  opacity: 0.85 !important;
+  box-shadow: var(--shadow-xl, 0 12px 32px rgba(0,0,0,0.2)) !important;
+  position: relative;
+  z-index: 5;
+  transition: opacity 0.1s;
+}
+/* 触摸设备: 禁文本选择, 避免长按卡片弹出系统放大镜/选择菜单 */
+@media (hover: none) {
+  .notelist-container {
+    -webkit-touch-callout: none;
+    -webkit-user-select: none;
+    user-select: none;
+  }
 }
 .note-drop-here {
   position: relative;

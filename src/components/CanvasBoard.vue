@@ -13,13 +13,16 @@
       </div>
     </div>
 
-    <!-- 画布容器 (处理 pan/zoom) -->
+    <!-- 画布容器 (处理 pan/zoom; pointer 事件同时支持鼠标与触摸) -->
     <div class="canvas-viewport"
       @wheel.prevent="onWheel"
-      @mousedown="onPanStart"
-      @mousemove="onPanMove"
-      @mouseup="onPanEnd"
-      @mouseleave="onPanEnd">
+      @pointerdown="onPanStart"
+      @pointermove="onPanMove"
+      @pointerup="onPanEnd"
+      @pointerleave="onPanEnd"
+      @touchstart.passive="onTouchStart"
+      @touchmove.passive="onTouchMove"
+      @touchend.passive="onTouchEnd">
       <!-- 画布内部, 靠 transform 实现缩放和位移 -->
       <div class="canvas-world" :style="worldStyle">
         <!-- 网格背景 (视觉辅助) -->
@@ -43,7 +46,7 @@
           class="note-card"
           :class="{ dragging: card.id === draggingId }"
           :style="cardStyle(card)"
-          @mousedown.stop="onCardDragStart($event, card)"
+          @pointerdown.stop="onCardDragStart($event, card)"
           @dblclick="openNote(card)">
           <div class="card-title">{{ card.title || '无标题' }}</div>
           <div class="card-preview" v-if="card.content">{{ cardPreview(card.content) }}</div>
@@ -81,7 +84,12 @@ const panStart = reactive({ x: 0, y: 0, panX: 0, panY: 0 });
 const cards = ref([]);
 const draggingId = ref(null);
 const dragOffset = reactive({ x: 0, y: 0 });
+const dragStartClient = reactive({ x: 0, y: 0 });
 const positions = reactive({}); // { noteId: {x, y} }
+
+// ===== 触摸状态 (双指缩放) =====
+const isPinching = ref(false);
+let pinchDist = 0;
 
 const gridStep = 40;
 const gridSize = 2000;
@@ -117,7 +125,7 @@ function onKeydown(e) {
 }
 
 function onPanStart(e) {
-  if (e.button !== 0 || e.target.closest('.note-card')) return;
+  if (e.button !== 0 || e.target.closest('.note-card') || isPinching.value) return;
   isPanning.value = true;
   panStart.x = e.clientX;
   panStart.y = e.clientY;
@@ -133,15 +141,46 @@ function onPanMove(e) {
 
 function onPanEnd() { isPanning.value = false; }
 
-// ===== 卡片拖拽 =====
+// ===== 双指缩放 (触摸设备) =====
+
+function onTouchStart(e) {
+  if (e.touches.length !== 2) return;
+  isPinching.value = true;
+  isPanning.value = false;
+  pinchDist = Math.hypot(
+    e.touches[0].clientX - e.touches[1].clientX,
+    e.touches[0].clientY - e.touches[1].clientY
+  );
+}
+
+function onTouchMove(e) {
+  if (!isPinching.value || e.touches.length !== 2) return;
+  const d = Math.hypot(
+    e.touches[0].clientX - e.touches[1].clientX,
+    e.touches[0].clientY - e.touches[1].clientY
+  );
+  if (pinchDist > 0) {
+    scale.value = Math.min(3, Math.max(0.2, scale.value * (d / pinchDist)));
+  }
+  pinchDist = d;
+}
+
+function onTouchEnd() {
+  isPinching.value = false;
+  pinchDist = 0;
+}
+
+// ===== 卡片拖拽 (pointer 事件, 鼠标与触摸通用) =====
 
 function onCardDragStart(e, card) {
   draggingId.value = card.id;
   const pos = positions[card.id] || { x: 0, y: 0 };
   dragOffset.x = e.clientX - pos.x;
   dragOffset.y = e.clientY - pos.y;
-  document.addEventListener('mousemove', onDragMove);
-  document.addEventListener('mouseup', onDragEnd);
+  dragStartClient.x = e.clientX;
+  dragStartClient.y = e.clientY;
+  document.addEventListener('pointermove', onDragMove);
+  document.addEventListener('pointerup', onDragEnd);
 }
 
 function onDragMove(e) {
@@ -154,10 +193,19 @@ function onDragMove(e) {
   positions[draggingId.value] = { ...positions[draggingId.value] };
 }
 
-function onDragEnd() {
+function onDragEnd(e) {
+  const moved = Math.hypot(
+    (e?.clientX ?? dragStartClient.x) - dragStartClient.x,
+    (e?.clientY ?? dragStartClient.y) - dragStartClient.y
+  );
+  const card = cards.value.find(c => c.id === draggingId.value);
   draggingId.value = null;
-  document.removeEventListener('mousemove', onDragMove);
-  document.removeEventListener('mouseup', onDragEnd);
+  document.removeEventListener('pointermove', onDragMove);
+  document.removeEventListener('pointerup', onDragEnd);
+  // 触摸端没有可靠的 dblclick: 位移极小 (<10px) 视为点击, 打开笔记
+  if (card && e?.pointerType === 'touch' && moved < 10) {
+    openNote(card);
+  }
 }
 
 // ===== 工具 =====
@@ -283,6 +331,8 @@ onUnmounted(() => {
   overflow: hidden;
   position: relative;
   cursor: grab;
+  /* 触摸设备: 手势全部交给画布 (单指平移/双指缩放), 禁止浏览器默认滚动与缩放 */
+  touch-action: none;
 }
 .canvas-viewport:active {
   cursor: grabbing;
@@ -312,6 +362,7 @@ onUnmounted(() => {
   cursor: grab;
   transition: box-shadow .2s;
   user-select: none;
+  touch-action: none;
 }
 .note-card:hover {
   box-shadow: var(--shadow-lg);

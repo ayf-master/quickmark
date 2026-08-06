@@ -62,9 +62,9 @@ export const chapters = [
         items: [
           { label: '1. 建分类', desc: '先建一个分类来组织笔记。', action: { id: 'openNewCategory', label: '新建分类' } },
           { label: '2. 写笔记', desc: '现在试试新建第一篇笔记, 弹层里选个分类, 2 秒自动保存。', action: { id: 'createNote', label: '新建笔记' } },
-          { label: '3. 搜索试试', desc: '按 <kbd>Ctrl</kbd>+<kbd>K</kbd> 搜刚写的关键词, 看实时过滤。', action: { id: 'focusSearch', label: '聚焦搜索框' }, keys: ['Ctrl', 'K'] }
+          { label: '3. 搜索试试', desc: '在搜索框搜刚写的关键词, 看实时过滤。', action: { id: 'focusSearch', label: '聚焦搜索框' }, keys: ['Ctrl', 'K'] }
         ],
-        tip: '走完这三步就上手了。后续不会的随时 <kbd>Ctrl</kbd>+<kbd>Shift</kbd>+<kbd>/</kbd> 打开本指南。'
+        tip: '走完这三步就上手了。后续不会的随时打开本指南。'
       }
     ]
   },
@@ -78,18 +78,18 @@ export const chapters = [
       {
         heading: '创建与删除',
         items: [
-          { label: '新建', desc: '<kbd>Alt</kbd>+<kbd>N</kbd> 弹层选分类, 或移动端顶部 <kbd>+</kbd>。新建前必须先选一个分类。', keys: ['Alt', 'N'] },
-          { label: '关闭编辑器', desc: '<kbd>Esc</kbd> 收起, 改动会先自动保存。', keys: ['Esc'] },
+          { label: '新建', desc: '顶部 <kbd>+</kbd> 新建, 弹层里选个分类。新建前必须先选一个分类。', keys: ['Alt', 'N'] },
+          { label: '关闭编辑器', desc: '返回按钮收起, 改动会先自动保存。', keys: ['Esc'] },
           { label: '删除', desc: '编辑器底部"删除"按钮 (二次确认), 或列表条目上的删除图标。' }
         ]
       },
       {
         heading: '组织与查找',
         items: [
-          { label: '置顶', desc: '编辑器底部"置顶"按钮, 或 <kbd>Ctrl</kbd>+<kbd>Shift</kbd>+<kbd>P</kbd>。', keys: ['Ctrl', 'Shift', 'P'] },
+          { label: '置顶', desc: '编辑器工具栏"收藏"按钮。', keys: ['Ctrl', 'Shift', 'P'] },
           { label: '只看置顶', desc: '列表头部置顶按钮, 一键筛选。' },
-          { label: '搜索笔记', desc: '<kbd>Ctrl</kbd>+<kbd>K</kbd> 聚焦搜索框, 实时按标题/正文模糊匹配。', keys: ['Ctrl', 'K'] },
-          { label: '搜索分类', desc: '<kbd>Ctrl</kbd>+<kbd>Shift</kbd>+<kbd>F</kbd> 聚焦分类搜索, 命中分类+祖先路径完整展示。', keys: ['Ctrl', 'Shift', 'F'] },
+          { label: '搜索笔记', desc: '在搜索框输入关键词, 实时按标题/正文模糊匹配。', keys: ['Ctrl', 'K'] },
+          { label: '搜索分类', desc: '在分类搜索框输入关键词, 命中分类+祖先路径完整展示。', keys: ['Ctrl', 'Shift', 'F'] },
           { label: '多分类', desc: '编辑器内可给一篇笔记选多个分类, 列表显示所有关联分类名。' }
         ]
       }
@@ -152,7 +152,7 @@ export const chapters = [
       {
         heading: '图片',
         items: [
-          { label: '粘贴', desc: '复制图片后在编辑器里 <kbd>Ctrl</kbd>+<kbd>V</kbd>, 自动上传并插入。' },
+          { label: '粘贴', desc: '复制图片后在编辑器里粘贴, 自动上传并插入。' },
           { label: '拖拽', desc: '把图片文件直接拖到编辑器里, 同上自动上传。' }
         ]
       }

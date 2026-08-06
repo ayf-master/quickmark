@@ -1,7 +1,12 @@
 <template>
   <div>
     <div draggable="true"
+      :data-cat-id="node.id"
       @click="$emit('select', node)"
+      @touchstart.passive="onTouchStart"
+      @touchmove="onTouchMove"
+      @touchend="onTouchEnd"
+      @touchcancel="onTouchCancel"
       @dragstart="onDragStart"
       @dragover.prevent="onDragOver"
       @drop.prevent="onDrop"
@@ -95,6 +100,8 @@
 <script>
 // 模块级共享变量 — 跨所有 CategoryTreeNode 实例共享拖拽状态
 let dragCatId = null;
+// 触摸长按拖拽状态 (跨递归实例共享, 与 dragCatId 同理)
+let touchDrag = { timer: null, id: null, startY: 0, el: null, activated: false };
 </script>
 
 <script setup>
@@ -131,20 +138,9 @@ function onDragOver(e) {
   }
 }
 
-async function onDrop(e) {
-  // Note drop: move note to this category
-  const noteId = e.dataTransfer.getData('application/x-quickmark-note');
-  if (noteId) {
-    dragCatId = null;
-    await store.moveNoteToCategory(Number(noteId), props.node.id);
-    return;
-  }
-  // Category drop (reorder)
-  dropHere.value = false;
-  const fromId = dragCatId;
-  const toId = props.node.id;
-  if (!fromId || fromId === toId) return;
-  // 只重排与目标同级的分类, 在 store.categories 中直接操作
+// 核心重排逻辑: 桌面 drop / 触摸放置共用 (只重排与目标同级的分类)
+async function reorderCategory(fromId, toId) {
+  if (!fromId || !toId || fromId === toId) return;
   const targetCat = store.categories.find(c => c.id === toId);
   if (!targetCat) return;
   const parentId = targetCat.parent_id;
@@ -174,9 +170,114 @@ async function onDrop(e) {
   }
 }
 
+async function onDrop(e) {
+  // Note drop: move note to this category
+  const noteId = e.dataTransfer.getData('application/x-quickmark-note');
+  if (noteId) {
+    dragCatId = null;
+    await store.moveNoteToCategory(Number(noteId), props.node.id);
+    return;
+  }
+  // Category drop (reorder)
+  dropHere.value = false;
+  await reorderCategory(dragCatId, props.node.id);
+  dragCatId = null;
+}
+
 function onDragEnd() {
   dragging.value = false;
   dropHere.value = false;
+  dragCatId = null;
+  emit('drag-cat-end');
+}
+
+// ===== 触摸长按拖拽排序 (手机/平板) =====
+const TOUCH_LONG_PRESS_MS = 400;
+
+function clearDropHereAll() {
+  document.querySelectorAll('.category-row.cat-drop-here').forEach(el => el.classList.remove('cat-drop-here'));
+}
+
+function onTouchStart(e) {
+  if (e.touches.length !== 1 || dragCatId) return;
+  const t = e.touches[0];
+  touchDrag.id = props.node.id;
+  touchDrag.startY = t.clientY;
+  touchDrag.el = e.currentTarget;
+  touchDrag.activated = false;
+  touchDrag.timer = setTimeout(() => {
+    touchDrag.activated = true;
+    dragCatId = props.node.id;
+    dragging.value = true;
+    touchDrag.el?.classList.add('cat-touch-lifted');
+    emit('drag-cat-start', props.node.id);
+  }, TOUCH_LONG_PRESS_MS);
+}
+
+function onTouchMove(e) {
+  if (!dragCatId) {
+    // 长按未激活: 手指移动超过阈值视为滚动, 取消长按
+    if (touchDrag.id != null && e.touches.length) {
+      if (Math.abs(e.touches[0].clientY - touchDrag.startY) > 10) {
+        clearTimeout(touchDrag.timer);
+        touchDrag.id = null;
+      }
+    }
+    return;
+  }
+  // 拖拽中: 阻止滚动, 行跟随手指, 高亮手指下的目标行
+  e.preventDefault();
+  const t = e.touches[0];
+  const shift = t.clientY - touchDrag.startY;
+  if (touchDrag.el) touchDrag.el.style.transform = `translateY(${shift}px)`;
+  const fingerY = t.clientY;
+  let target = null;
+  for (const row of document.querySelectorAll('.category-row')) {
+    const r = row.getBoundingClientRect();
+    if (fingerY >= r.top && fingerY <= r.bottom) {
+      const cid = Number(row.dataset.catId);
+      if (cid && cid !== dragCatId) target = cid;
+      break;
+    }
+  }
+  clearDropHereAll();
+  if (target) {
+    document.querySelector(`.category-row[data-cat-id="${target}"]`)?.classList.add('cat-drop-here');
+  }
+}
+
+async function onTouchEnd() {
+  clearTimeout(touchDrag.timer);
+  const fromId = dragCatId;
+  const targetRow = document.querySelector('.category-row.cat-drop-here');
+  const toId = targetRow ? Number(targetRow.dataset.catId) : null;
+  clearDropHereAll();
+  if (touchDrag.el) {
+    touchDrag.el.classList.remove('cat-touch-lifted');
+    touchDrag.el.style.transform = '';
+  }
+  const wasDragging = touchDrag.activated;
+  dragging.value = false;
+  touchDrag = { timer: null, id: null, startY: 0, el: null, activated: false };
+  dragCatId = null;
+  emit('drag-cat-end');
+  if (wasDragging && fromId) {
+    // 长按松手后系统会补发 click, 会误触发"选中分类", 这里吞掉它
+    const swallowClick = (ev) => { ev.preventDefault(); ev.stopPropagation(); document.removeEventListener('click', swallowClick, true); };
+    document.addEventListener('click', swallowClick, true);
+    await reorderCategory(fromId, toId);
+  }
+}
+
+function onTouchCancel() {
+  clearTimeout(touchDrag.timer);
+  clearDropHereAll();
+  if (touchDrag.el) {
+    touchDrag.el.classList.remove('cat-touch-lifted');
+    touchDrag.el.style.transform = '';
+  }
+  dragging.value = false;
+  touchDrag = { timer: null, id: null, startY: 0, el: null, activated: false };
   dragCatId = null;
   emit('drag-cat-end');
 }
@@ -224,21 +325,43 @@ function onDragEnd() {
   min-width: 0;
 }
 
-/* 深层分类 (>=2级) 默认隐藏 编辑/删除/新建子分类 按钮, 只保留 +号(在此分类下新建笔记) */
+/* 深层分类 (>=2级) 管理按钮: 触摸设备常显; 鼠标设备 hover 行时才显示 */
 /* 用 opacity + transform 而非 width/padding, hover 时不会冒出黑框, 保持形式统一 */
 .cat-children :deep(.category-row .action-hover) {
-  opacity: 0;
-  transform: scale(0.85);
-  pointer-events: none;
-  transition: opacity 0.15s, transform 0.15s;
-}
-.cat-children :deep(.category-row:hover .action-hover) {
   opacity: 1;
   transform: scale(1);
-  pointer-events: auto;
+  transition: opacity 0.15s, transform 0.15s;
+}
+@media (hover: hover) and (pointer: fine) {
+  .cat-children :deep(.category-row .action-hover) {
+    opacity: 0;
+    transform: scale(0.85);
+    pointer-events: none;
+  }
+  .cat-children :deep(.category-row:hover .action-hover) {
+    opacity: 1;
+    transform: scale(1);
+    pointer-events: auto;
+  }
 }
 .cat-dragging {
   opacity: 0.4 !important;
+}
+/* 触摸长按拖拽: 被拖行浮起 (位移在 JS 里以 transform 设置) */
+.cat-touch-lifted {
+  opacity: 0.85 !important;
+  box-shadow: var(--shadow-md, 0 4px 16px rgba(0,0,0,0.15)) !important;
+  position: relative;
+  z-index: 6;
+  transition: opacity 0.1s;
+}
+/* 触摸设备: 禁文本选择, 避免长按行弹出系统菜单 */
+@media (hover: none) {
+  .category-row {
+    -webkit-touch-callout: none;
+    -webkit-user-select: none;
+    user-select: none;
+  }
 }
 .cat-drop-here {
   position: relative;

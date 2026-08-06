@@ -6,7 +6,7 @@
       <template v-if="store.onboardingStep === 0">
         <div class="tour-mask" @click="store.dismissOnboarding()"></div>
         <div class="tour-card-centered">
-          <div class="tour-card-inner" style="width: 400px;" @click.stop>
+          <div class="tour-card-inner" style="width: min(400px, 100%);" @click.stop>
             <div class="tour-accent-bar"></div>
             <div class="tour-body">
               <div class="tour-step-badge-wrap">
@@ -96,7 +96,7 @@
       <template v-else>
         <div class="tour-mask" @click="finish"></div>
         <div class="tour-card-centered">
-          <div class="tour-card-inner" style="width: 400px;" @click.stop>
+          <div class="tour-card-inner" style="width: min(400px, 100%);" @click.stop>
             <div class="tour-accent-bar" style="background: linear-gradient(90deg, #22c55e, #16a34a);"></div>
             <div class="tour-body" style="text-align: center;">
               <div class="tour-icon-box" style="background: rgba(34,197,94,0.15);">
@@ -133,40 +133,53 @@ const totalSteps = ONBOARDING_TOTAL_STEPS; // must be 6
 
 const actionHintText = computed(() => {
   const step = store.onboardingStep;
-  if (step === 1) return '在左侧点击一个分类';
-  if (step === 2) return '在中间点击一篇笔记';
-  if (step === 3) return '在右侧编辑器中输入内容';
-  if (step === 4) return '点击用户头像，尝试切换主题或查看快捷键';
+  const m = store.isMobile;
+  if (step === 1) return m ? '打开左上角菜单, 点击一个分类' : '在左侧点击一个分类';
+  if (step === 2) return m ? '在列表中点击一篇笔记' : '在中间点击一篇笔记';
+  if (step === 3) return m ? '点击输入框开始输入' : '在右侧编辑器中输入内容';
+  if (step === 4) return store.isDesktop ? '点击用户头像, 尝试切换主题或查看快捷键' : '先返回列表, 再点击右上角头像切换主题';
   return '完成此操作';
 });
 
-// Step definitions
-const steps = [
+// Step definitions (手机/平板触摸设备无键盘: 文案适配 + 去掉快捷键提示)
+const steps = computed(() => {
+  const m = store.isMobile;
+  const hasKeyboard = store.isDesktop;
+  return [
   {
     selector: null,
     icon: 'M12 4v16m8-8H4',
     title: '欢迎使用 QuickMark',
     desc: '轻量级笔记应用，支持 <b>Markdown</b>、<b>树形分类</b>、<b>知识图谱</b>。<br>跟着引导实际操作一遍，快速上手。',
-    tip: '按 <kbd>Ctrl</kbd>+<kbd>Shift</kbd>+<kbd>/</kbd> 随时查看完整使用指南。'
+    tip: hasKeyboard ? '按 <kbd>Ctrl</kbd>+<kbd>Shift</kbd>+<kbd>/</kbd> 随时查看完整使用指南。' : undefined
   },
   {
     selector: '[data-tour="sidebar"]',
     icon: 'M3 7v10a2 2 0 002 2h14a2 2 0 002-2V9a2 2 0 00-2-2h-6l-2-2H5a2 2 0 00-2 2z',
     title: '浏览分类',
-    desc: '点击左侧 <b>任意一个分类</b>，查看该分类下的笔记。',
+    desc: m
+      ? '打开左上角 <b>菜单</b>, 点击 <b>任意一个分类</b> 查看笔记。'
+      : '点击左侧 <b>任意一个分类</b>, 查看该分类下的笔记。',
     action: 'category',
-    tip: '分类支持多级嵌套，悬停后点 "+" 可创建子分类。'
+    tip: m
+      ? '分类支持多级嵌套, 长按分类行可拖拽排序。'
+      : '分类支持多级嵌套, 悬停后点 "+" 可创建子分类。'
   },
   {
     selector: '[data-tour="note-list"]',
     icon: 'M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z',
     title: '打开笔记',
-    desc: '在笔记列表中 <b>点击一篇笔记</b>，右侧编辑器会打开它。',
+    desc: m
+      ? '在列表中 <b>点击一篇笔记</b> 打开它。'
+      : '在笔记列表中 <b>点击一篇笔记</b>, 右侧编辑器会打开它。',
     action: 'note',
-    tip: '笔记支持拖拽排序，点击大头针图标可收藏。'
+    tip: m
+      ? '长按笔记可拖拽排序, 卡片右上角删除图标可删除。'
+      : '笔记支持拖拽排序, 点击大头针图标可收藏。'
   },
   {
-    selector: '[data-tour="editor"]',
+    // 手机: 编辑器全屏, 高亮整个编辑器 = 整个屏幕黄框; 改高亮正文输入区
+    selector: m ? '[data-tour="editor-body"]' : '[data-tour="editor"]',
     icon: 'M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z',
     title: '开始写作',
     desc: '在编辑器中 <b>输入一些文字</b>，内容会自动保存。',
@@ -177,9 +190,15 @@ const steps = [
     selector: '[data-tour="user-menu"]',
     icon: 'M13 10V3L4 14h7v7l9-11h-7z',
     title: '探索更多功能',
-    desc: '点击右上角 <b>用户头像</b>，试试切换主题或查看快捷键。',
+    desc: hasKeyboard
+      ? '点击右上角 <b>用户头像</b>, 试试切换主题或查看快捷键。'
+      : m
+        ? '先点左上角 <b>返回</b> 回到列表, 再点右上角 <b>头像</b> 试试切换主题。'
+        : '点击右上角 <b>用户头像</b>, 试试切换主题。',
     action: 'theme',
-    tip: '<kbd>Alt</kbd>+<kbd>N</kbd> 新建笔记 · <kbd>Ctrl</kbd>+<kbd>Shift</kbd>+<kbd>P</kbd> 收藏切换'
+    tip: hasKeyboard
+      ? '<kbd>Alt</kbd>+<kbd>N</kbd> 新建笔记 · <kbd>Ctrl</kbd>+<kbd>Shift</kbd>+<kbd>P</kbd> 收藏切换'
+      : '打开菜单即可新建笔记或退出登录。'
   },
   {
     // Step 5: Done (no action)
@@ -187,11 +206,12 @@ const steps = [
     icon: 'M5 13l4 4L19 7',
     title: '已完成新手引导',
     desc: '你已经掌握了 QuickMark 的基本操作。<br>需要帮助时，随时查看使用指南。',
-    tip: '按 <kbd>Ctrl</kbd>+<kbd>Shift</kbd>+<kbd>/</kbd> 打开完整使用指南'
+    tip: hasKeyboard ? '按 <kbd>Ctrl</kbd>+<kbd>Shift</kbd>+<kbd>/</kbd> 打开完整使用指南' : undefined
   }
-];
+  ];
+});
 
-const stepDef = computed(() => steps[store.onboardingStep] || steps[0]);
+const stepDef = computed(() => steps.value[store.onboardingStep] || steps.value[0]);
 const isWaitingForAction = computed(() => {
   const s = store.onboardingStep;
   return s >= 1 && s <= 4;
@@ -308,10 +328,37 @@ function getTarget() {
 function updatePosition() {
   const s = store.onboardingStep;
   if (s === 0 || s >= totalSteps - 1) return;
+  // 手机上编辑器全屏 (fixed 盖住顶部栏含头像): 高亮被遮挡的目标无意义
+  if (store.isMobile && store.editingNote && s === 4) {
+    targetRect.value = null;
+    return;
+  }
   const el = getTarget();
   if (!el) { targetRect.value = null; return; }
-  targetRect.value = el.getBoundingClientRect();
+  const r = el.getBoundingClientRect();
+  const vw = window.innerWidth;
+  const vh = window.innerHeight;
+  // 目标在屏幕外 (如手机抽屉未打开时的侧栏): 不显示高亮框, 避免画到错误位置
+  if (r.width <= 0 || r.height <= 0 || r.right <= 0 || r.bottom <= 0 || r.left >= vw || r.top >= vh) {
+    targetRect.value = null;
+    return;
+  }
+  targetRect.value = r;
 }
+
+// 手机抽屉开/关时刷新高亮位置 (侧栏从屏幕外滑入后需重新计算)
+watch(() => store.mobileDrawerOpen, () => {
+  if (store.onboardingVisible) {
+    nextTick(() => setTimeout(updatePosition, 300));
+  }
+});
+
+// 编辑器打开/关闭时刷新 (手机上 Step 4 需先返回列表, 头像才可见)
+watch(() => store.editingNote, () => {
+  if (store.onboardingVisible) {
+    nextTick(() => setTimeout(updatePosition, 300));
+  }
+});
 
 function scrollToTarget() {
   const el = getTarget();
@@ -525,12 +572,76 @@ onUnmounted(() => {
   position: fixed;
   z-index: 45;
   pointer-events: auto;
-  width: 360px;
+  width: min(360px, calc(100vw - 32px));
   background: var(--bg-elevated);
   border: 1px solid var(--border-default);
   border-radius: 16px;
   box-shadow: 0 12px 40px rgba(0,0,0,0.25);
   padding: 22px 24px 18px;
+}
+/* 手机: 卡片过大占满屏幕, 压缩内边距/字号/图标, 超高可滚动 */
+@media (max-width: 720px) {
+  .tour-float-card {
+    width: calc(100vw - 24px);
+    padding: 16px 16px 14px;
+    max-height: calc(100vh - 56px);
+    overflow-y: auto;
+  }
+  .tour-float-card.tour-float-corner {
+    width: calc(100vw - 24px);
+  }
+  .tour-body {
+    padding: 18px 18px 14px;
+  }
+  .tour-icon-box {
+    width: 44px;
+    height: 44px;
+    border-radius: 12px;
+    margin-bottom: 12px;
+  }
+  .tour-float-icon-box {
+    width: 36px;
+    height: 36px;
+    border-radius: 10px;
+    margin-bottom: 8px;
+  }
+  .tour-icon {
+    width: 22px;
+    height: 22px;
+  }
+  .tour-float-icon-box .tour-icon {
+    width: 18px;
+    height: 18px;
+  }
+  .tour-title {
+    font-size: 1rem;
+    margin-bottom: 6px;
+  }
+  .tour-float-title {
+    font-size: 0.95rem;
+  }
+  .tour-desc {
+    font-size: 0.8rem;
+    line-height: 1.55;
+  }
+  .tour-tip {
+    margin-top: 8px;
+    padding: 8px 10px;
+    font-size: 0.74rem;
+    line-height: 1.6;
+  }
+  .tour-action-hint {
+    margin-top: 8px;
+    padding: 7px 10px;
+    font-size: 0.78rem;
+  }
+  .tour-btn-primary {
+    padding: 7px 14px;
+    font-size: 0.82rem;
+  }
+  .tour-step-badge-wrap {
+    margin-bottom: 10px;
+  }
 }
 /* 模态框打开时: 引导卡临时靠到右下角, 抬升 z-index 到 60
    (高于模态框 z-index 55, 但又不挡住模态框主体内容)

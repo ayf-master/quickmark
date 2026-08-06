@@ -121,6 +121,19 @@ onUnmounted(() => document.removeEventListener('click', onClickOutside));
   z-index: 50;
   overflow: hidden;
 }
+/* 手机: 齿轮按钮居中, absolute 面板会向左溢出屏幕;
+   改为 fixed 贴屏幕右缘, 从头部下方弹出, 超长可滚动
+   (平板 721-1024px 空间足够, 保持按钮下方下拉) */
+@media (max-width: 720px) {
+  .feature-panel-dropdown {
+    position: fixed;
+    top: 56px;
+    right: 8px;
+    width: min(320px, calc(100vw - 16px));
+    max-height: calc(100vh - 70px);
+    overflow-y: auto;
+  }
+}
 .panel-header {
   padding: 14px 16px 8px;
   border-bottom: 1px solid var(--border-default);

@@ -81,7 +81,7 @@ function confirmDelete(e) {
   box-shadow: var(--shadow-md);
   transform: translateY(-1px);
 }
-/* 卡片右上角删除按钮: 默认透明,hover 卡片时显示 */
+/* 卡片右上角删除按钮: 触摸设备常显; 鼠标设备 hover 卡片时显示 */
 .card-delete-btn {
   position: absolute;
   top: 8px;
@@ -94,18 +94,24 @@ function confirmDelete(e) {
   justify-content: center;
   background: transparent;
   color: var(--text-tertiary);
-  opacity: 0;
+  opacity: 1;
   transition: opacity 0.15s, background 0.15s, color 0.15s;
   cursor: pointer;
   border: none;
 }
-.card:hover .card-delete-btn,
-.card:focus-within .card-delete-btn {
-  opacity: 1;
-}
 .card-delete-btn:hover {
   background: var(--color-danger-subtle, #FEE2E2);
   color: var(--color-danger, #DC2626);
+}
+/* 仅有鼠标的设备: 恢复悬停显示, 避免常显按钮干扰视觉 */
+@media (hover: hover) and (pointer: fine) {
+  .card-delete-btn {
+    opacity: 0;
+  }
+  .card:hover .card-delete-btn,
+  .card:focus-within .card-delete-btn {
+    opacity: 1;
+  }
 }
 
 /* ===== 间隔重复到期高亮 ===== */
@@ -116,13 +122,19 @@ function confirmDelete(e) {
   font-size: 14px;
   line-height: 1;
   z-index: 1;
-  opacity: 0;
+  opacity: 1;
   transition: opacity .15s;
   pointer-events: none;
 }
-.card:hover .due-badge,
-.card:focus-within .due-badge {
-  opacity: 1;
+/* 仅有鼠标的设备: 悬停卡片才显示到期标记 */
+@media (hover: hover) and (pointer: fine) {
+  .due-badge {
+    opacity: 0;
+  }
+  .card:hover .due-badge,
+  .card:focus-within .due-badge {
+    opacity: 1;
+  }
 }
 .is-due-review {
   border-left: 3px solid var(--color-accent, #5b6ef5) !important;

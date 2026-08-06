@@ -14,8 +14,8 @@
         </svg>
       </button>
 
-      <!-- 移动端: 汉堡按钮 -->
-      <button v-if="store.isCompact"
+      <!-- 手机: 汉堡按钮 (平板/桌面侧栏常显) -->
+      <button v-if="store.isMobile"
         class="btn btn-icon btn-ghost"
         @click="store.mobileDrawerOpen = true"
         aria-label="打开菜单"
@@ -32,8 +32,8 @@
         <span class="hidden sm:inline">QuickMark</span>
       </h1>
 
-      <!-- 搜索框 (移动端居中) -->
-      <div v-if="store.isCompact" class="relative flex-1 max-w-xs ml-2">
+      <!-- 搜索框 (手机; 平板/桌面在笔记列表内搜索) -->
+      <div v-if="store.isMobile" class="relative flex-1 max-w-xs ml-2">
         <input type="text"
           v-model="store.searchQuery"
           @input="store.onSearchInput()"
@@ -185,8 +185,8 @@
             <span>新手引导</span>
           </button>
 
-          <!-- 快捷键面板 -->
-          <button
+          <!-- 快捷键面板 (触摸设备没有键盘, 不显示) -->
+          <button v-if="store.isDesktop"
             class="w-full text-left px-4 py-2 text-sm flex items-center gap-2 transition-colors"
             style="color: var(--text-primary);"
             @click="onOpenShortcuts"

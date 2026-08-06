@@ -86,8 +86,10 @@ export const store = reactive({
   toast: { show: false, message: '', type: 'success' },
 
   // ===== Viewport computed =====
-  isMobile: computed(() => viewport.width <= 768),
-  isTablet: computed(() => viewport.width > 768 && viewport.width <= 1024),
+  // 手机 ≤720 (覆盖 iPad mini 6 竖屏 744px 之前); 平板 721-1024; 桌面 >1024
+  // 平板与桌面同屏布局 (侧栏+列表+编辑器并排), 仅宽度压缩
+  isMobile: computed(() => viewport.width <= 720),
+  isTablet: computed(() => viewport.width > 720 && viewport.width <= 1024),
   isDesktop: computed(() => viewport.width > 1024),
   isCompact: computed(() => viewport.width <= 1024),
 
