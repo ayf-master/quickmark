@@ -1,6 +1,6 @@
 <template>
   <section class="flex flex-col h-full fade-in-up"
-    :class="{ 'editor-fullscreen': store.isMobile }"
+    :class="{ 'editor-fullscreen': store.isCompact }"
     :style="panelStyle"
     role="region"
     aria-label="笔记编辑器">
@@ -12,7 +12,7 @@
 
       <!-- 左侧: 返回 / 模式切换 -->
       <div class="flex items-center gap-3 min-w-0">
-        <button v-if="store.isMobile"
+        <button v-if="store.isCompact"
           class="btn btn-icon-sm btn-ghost flex-shrink-0"
           @click="store.closeEditor()"
           aria-label="返回列表">

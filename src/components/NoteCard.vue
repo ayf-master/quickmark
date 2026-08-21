@@ -38,15 +38,16 @@
         v-text="note.title || '无标题'"></h3>
     </div>
     <p class="text-sm line-clamp-2 leading-relaxed mb-3"
-      style="color: var(--text-secondary);"
+      style="color: var(--text-secondary); overflow-wrap: anywhere;"
       v-text="(note.content ? store.stripHtml(note.content) : '') || '无内容'"></p>
     <div class="flex items-center justify-between gap-3">
       <span class="text-xs flex-shrink-0"
         style="color: var(--text-tertiary);"
         v-text="store.formatTime(note.updated_at)"></span>
-      <div class="flex items-center gap-1.5 flex-wrap justify-end min-h-[18px]">
+      <!-- min-w-0: 允许 flex 子项收缩; 标签超出时省略号截断, 防止撑宽卡片/列表 -->
+      <div class="flex items-center gap-1.5 flex-wrap justify-end min-h-[18px] min-w-0">
         <span v-for="cname in (note.category_names || [])" :key="cname"
-          class="text-xs px-2 py-0.5 rounded-full"
+          class="text-xs px-2 py-0.5 rounded-full card-cat-tag"
           style="background: var(--bg-hover); color: var(--text-secondary);"
           v-text="cname"></span>
       </div>
@@ -112,6 +113,14 @@ function confirmDelete(e) {
   .card:focus-within .card-delete-btn {
     opacity: 1;
   }
+}
+
+/* 分类标签: 超长时省略, 避免把卡片/列表撑出屏幕 */
+.card-cat-tag {
+  max-width: 100%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 /* ===== 间隔重复到期高亮 ===== */

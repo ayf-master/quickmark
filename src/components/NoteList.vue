@@ -197,6 +197,8 @@ const containerStyle = computed(() => {
     return {
       width: collapsed ? '0px' : width,
       flexShrink: '0',
+      // min-width: 0 让宽度不被长内容撑开 (否则卡片右侧会溢出屏幕)
+      minWidth: '0',
       position: 'relative',
       overflow: 'visible',
       transition: 'width 0.2s ease',
@@ -206,6 +208,7 @@ const containerStyle = computed(() => {
   }
   return {
     flex: '1',
+    minWidth: '0',
     background: 'var(--bg-panel)',
     position: 'relative'
   };

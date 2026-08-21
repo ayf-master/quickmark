@@ -21,8 +21,8 @@
       <div class="app-layout flex-1 min-h-0">
         <Sidebar />
 
-        <!-- 笔记列表: 桌面/平板始终显示; 手机编辑时隐藏 -->
-        <NoteList v-show="!store.isMobile || !store.editingNote" />
+        <!-- 笔记列表: 桌面始终显示; 手机/平板编辑时隐藏 (编辑全屏, 保证编辑区宽度) -->
+        <NoteList v-show="!store.editingNote || !store.isCompact" />
 
         <!-- 编辑器: 桌面/平板始终显示(空态时占位); 手机仅编辑时显示 -->
         <NoteEditor v-if="store.editingNote" v-show="store.isDesktop || store.isCompact" />

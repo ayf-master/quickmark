@@ -178,8 +178,8 @@ const steps = computed(() => {
       : '笔记支持拖拽排序, 点击大头针图标可收藏。'
   },
   {
-    // 手机: 编辑器全屏, 高亮整个编辑器 = 整个屏幕黄框; 改高亮正文输入区
-    selector: m ? '[data-tour="editor-body"]' : '[data-tour="editor"]',
+    // 手机/平板: 编辑器全屏, 高亮整个编辑器 = 整个屏幕黄框; 改高亮正文输入区
+    selector: store.isCompact ? '[data-tour="editor-body"]' : '[data-tour="editor"]',
     icon: 'M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z',
     title: '开始写作',
     desc: '在编辑器中 <b>输入一些文字</b>，内容会自动保存。',
@@ -192,7 +192,7 @@ const steps = computed(() => {
     title: '探索更多功能',
     desc: hasKeyboard
       ? '点击右上角 <b>用户头像</b>, 试试切换主题或查看快捷键。'
-      : m
+      : store.isCompact
         ? '先点左上角 <b>返回</b> 回到列表, 再点右上角 <b>头像</b> 试试切换主题。'
         : '点击右上角 <b>用户头像</b>, 试试切换主题。',
     action: 'theme',
@@ -328,8 +328,8 @@ function getTarget() {
 function updatePosition() {
   const s = store.onboardingStep;
   if (s === 0 || s >= totalSteps - 1) return;
-  // 手机上编辑器全屏 (fixed 盖住顶部栏含头像): 高亮被遮挡的目标无意义
-  if (store.isMobile && store.editingNote && s === 4) {
+  // 手机/平板上编辑器全屏 (fixed 盖住顶部栏含头像): 高亮被遮挡的目标无意义
+  if (store.isCompact && store.editingNote && s === 4) {
     targetRect.value = null;
     return;
   }
