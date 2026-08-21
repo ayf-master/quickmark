@@ -1821,6 +1821,8 @@ document.addEventListener('keydown', onKeydown);
 }
 .md-editor {
   flex: 1;
+  /* min-width: 0: 防止内容(长代码行/长URL)把编辑框撑出屏幕 */
+  min-width: 0;
   background: var(--bg-input, var(--bg-panel-2));
   border: 1px solid var(--border-default);
   border-radius: 8px;
@@ -1843,6 +1845,7 @@ document.addEventListener('keydown', onKeydown);
 }
 .md-preview {
   flex: 1 1 50%;
+  min-width: 0;
   background: var(--bg-input, var(--bg-panel-2));
   border: 1px solid var(--border-default);
   border-radius: 8px;
@@ -1850,6 +1853,7 @@ document.addEventListener('keydown', onKeydown);
   color: var(--text-primary);
   font-size: 14px;
   line-height: 1.75;
+  overflow-x: auto;
   overflow-y: auto;
   min-height: 50vh;
   max-height: 70vh;
@@ -1979,6 +1983,9 @@ document.addEventListener('keydown', onKeydown);
   .md-pane.with-preview .md-editor,
   .md-pane.with-preview .md-preview {
     flex: 1 1 auto;
+    /* 明确全宽 + 允许收缩: 编辑/预览框撑满容器, 不被长内容撑出屏幕 */
+    min-width: 0;
+    width: 100%;
     min-height: 30vh;
   }
 }
@@ -2039,6 +2046,7 @@ button[aria-label="删除笔记"]:hover {
 }
 .plain-editor {
   flex: 1;
+  min-width: 0;
   background: var(--bg-input, var(--bg-panel-2));
   border: 1px solid var(--border-default);
   border-radius: 8px;
