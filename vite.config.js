@@ -34,7 +34,9 @@ export default defineConfig({
   },
   build: {
     outDir: 'dist',
-    emptyOutDir: true
+    // 空 dist 操作改由 npm script 自己处理 (rm -rf), 避免 Windows 平台
+    // Vite 自带的 safe-delete trash 操作被沙箱拦截导致构建卡住
+    emptyOutDir: false
   }
 });
 

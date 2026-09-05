@@ -10,8 +10,18 @@
       style="border-bottom: 1px solid var(--border-default); background: var(--bg-panel);"
       data-tour="editor">
 
-      <!-- 左侧: 返回 / 模式切换 -->
-      <div class="flex items-center gap-3 min-w-0">
+      <!-- 左侧: 上一条 / 返回列表 / 模式切换 -->
+      <div class="flex items-center gap-1 min-w-0">
+        <!-- 回到上一条笔记 (导航历史栈非空时启用) -->
+        <button v-if="store.editingNote && store.noteHistory.length > 0"
+          class="btn btn-icon-sm btn-ghost flex-shrink-0"
+          @click="goBackToPrev"
+          :title="'回到上一条笔记 (Alt+←)' + (prevNoteTitle ? ' · ' + prevNoteTitle : '')"
+          aria-label="回到上一条笔记">
+          <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 10h11a5 5 0 010 10H9m0-10l4-4M9 6l-4 4"/>
+          </svg>
+        </button>
         <button v-if="store.isCompact"
           class="btn btn-icon-sm btn-ghost flex-shrink-0"
           @click="store.closeEditor()"
@@ -302,7 +312,7 @@
               <path d="M12 2a10 10 0 0110 10" stroke-width="3" stroke-linecap="round"/>
             </svg>
           </button>
-          <input ref="fileInput" type="file" accept="image/*" class="hidden" @change="onFileSelected" />
+          <input ref="fileInput" type="file" accept="image/*" multiple class="hidden" @change="onFileSelected" />
         </div>
 
         <div class="md-toolbar-divider"></div>
@@ -523,6 +533,19 @@ const markingReview = ref(false);
 const isDueNote = computed(() => {
   return store.editingNote?.id && features.dueCardMap[store.editingNote.id] != null;
 });
+
+// ===== 笔记导航历史: "回到上一条笔记" =====
+const prevNoteTitle = computed(() => {
+  const lastId = store.noteHistory[store.noteHistory.length - 1];
+  if (!lastId) return '';
+  const n = store.notes.find(x => x.id === lastId);
+  return n ? n.title || '无标题' : '';
+});
+function goBackToPrev() {
+  if (!store.goBackToPreviousNote()) {
+    // 栈空 / 全删, 不弹 toast (按钮本就是 disabled 状态)
+  }
+}
 
 async function markReviewed() {
   if (!store.editingNote?.id) return;
@@ -1066,6 +1089,11 @@ function switchMode(target) {
 // ===== Markdown 工具栏操作 =====
 
 // 在当前光标处插入文本 (替换当前选区)
+// 在当前光标处插入文本 (替换当前选区)
+// 修复 cursor 位置 bug: 原来 cursor = start + prefix.length + selected.length
+//   会停在 prefix 后, suffix (如 "](url)") 还在后面, 下次插入会嵌进 suffix 前
+//   表现为多图粘贴时 markdown 嵌套: ![a![b![c(...)
+// 改为 cursor = start + newText.length, 让光标停在完整 newText 末尾
 function mdInsert(prefix, suffix, placeholder) {
   const ta = contentInput.value;
   if (!ta) return;
@@ -1077,7 +1105,7 @@ function mdInsert(prefix, suffix, placeholder) {
   const after = ta.value.slice(end);
   const newText = prefix + selected + (suffix || '');
   ta.value = before + newText + after;
-  const cursor = start + prefix.length + selected.length;
+  const cursor = start + newText.length;
   ta.setSelectionRange(cursor, cursor);
   ta.dispatchEvent(new Event('input', { bubbles: true }));
 }
@@ -1492,19 +1520,54 @@ const codeBlockLabel = '{}';
 function mdInsertImage() {
   fileInput.value?.click();
 }
-async function onFileSelected(e) {
-  const file = e.target.files?.[0];
-  e.target.value = ''; // 重置以允许同文件再选
-  if (!file) return;
+// ===== 批量图片上传 (粘贴 / 文件选择共用) =====
+// 串行上传逐张插入: 光标位置稳定, 不会因并发 race 错位
+// 任一失败不影响其他图片; 结束按成功/失败数给总提示
+async function insertImages(files, labelPrefix = '图片') {
+  if (!files || files.length === 0) return; // 防御: 空数组不弹 toast
+  if (files.length === 1) {
+    store.editorImageUploading = true;
+    try {
+      const url = await uploadImageFile(files[0]);
+      mdInsert(`![`, `](${url})`, labelPrefix);
+    } catch (err) {
+      store.showToast('图片上传失败: ' + err.message, 'error');
+    } finally {
+      store.editorImageUploading = false;
+    }
+    return;
+  }
+
   store.editorImageUploading = true;
+  store.showToast(`开始上传 ${files.length} 张图片...`, 'success');
+  let ok = 0;
+  const failed = [];
   try {
-    const url = await uploadImageFile(file);
-    mdInsert(`![`, `](${url})`, '图片描述');
-  } catch (err) {
-    store.showToast('图片上传失败: ' + err.message, 'error');
+    for (let i = 0; i < files.length; i++) {
+      try {
+        const url = await uploadImageFile(files[i]);
+        mdInsert(`![`, `](${url})`, `${labelPrefix}${i + 1}`);
+        ok++;
+      } catch (err) {
+        failed.push({ index: i, msg: err.message || '上传失败' });
+      }
+    }
   } finally {
     store.editorImageUploading = false;
   }
+  if (failed.length === 0) {
+    store.showToast(`已插入 ${ok} 张图片`, 'success');
+  } else {
+    const failedList = failed.map(f => `#${f.index + 1}: ${f.msg}`).join('; ');
+    store.showToast(`已插入 ${ok} 张, ${failed.length} 张失败 (${failedList})`, 'error');
+  }
+}
+
+async function onFileSelected(e) {
+  const files = Array.from(e.target.files || []).filter(f => f.type.startsWith('image/'));
+  e.target.value = ''; // 重置以允许同文件再选
+  if (files.length === 0) return;
+  await insertImages(files, '图片');
 }
 
 // 插入链接
@@ -1529,27 +1592,30 @@ function mdInsertLink() {
 // 间隔重复: 到期笔记在 NoteList 中高亮, 无需自测卡
 
 // ===== 粘贴处理 =====
+// 一次粘贴多张图片: 收集剪贴板所有 image 文件, 逐张上传并以 markdown 形式插入
+// 上传中显示总进度 toast; 任一失败回滚不影响其他图片插入
 async function handlePaste(e) {
   if (store.editMode !== 'markdown') return;
   const items = e.clipboardData?.items;
   if (!items) return;
+  // 收集所有图片文件 (dataTransfer.files 是另一份来源, 有些浏览器只走其中之一)
+  const files = [];
   for (const item of items) {
     if (item.kind === 'file' && item.type.startsWith('image/')) {
-      e.preventDefault();
-      const file = item.getAsFile();
-      if (!file) return;
-      store.editorImageUploading = true;
-      try {
-        const url = await uploadImageFile(file);
-        mdInsert(`![`, `](${url})`, '粘贴图片');
-      } catch (err) {
-        store.showToast('粘贴图片失败: ' + err.message, 'error');
-      } finally {
-        store.editorImageUploading = false;
-      }
-      return;
+      const f = item.getAsFile();
+      if (f) files.push(f);
     }
   }
+  if (files.length === 0 && e.clipboardData?.files) {
+    for (const f of e.clipboardData.files) {
+      if (f.type && f.type.startsWith('image/')) files.push(f);
+    }
+  }
+  if (files.length === 0) return;
+  // 阻止默认: 否则浏览器会把图片以 base64/文件名形式再插一次
+  e.preventDefault();
+  // 收集完交给公共批量上传逻辑, 与文件选择走同一条路径
+  await insertImages(files, '粘贴图片');
 }
 
 // 纯文本滚动同步 (textarea → preview div)
@@ -1720,10 +1786,20 @@ onBeforeUnmount(() => {
   document.removeEventListener('keydown', onKeydown);
 });
 
-// 全局快捷键: Ctrl+Alt+M/P 切模式
+// 全局快捷键:
+//   Ctrl/Cmd+Alt+M/P 切模式
+//   Alt+左方向键      回到上一条笔记 (栈非空时)
 function onKeydown(e) {
-  if (!(e.ctrlKey || e.metaKey) || !e.altKey) return;
   if (!isAlive || !store.editingNote) return;
+  // Alt+左 = 回到上一条
+  if (e.altKey && e.key === 'ArrowLeft' && !e.ctrlKey && !e.metaKey) {
+    if (store.noteHistory.length > 0) {
+      e.preventDefault();
+      goBackToPrev();
+    }
+    return;
+  }
+  if (!(e.ctrlKey || e.metaKey) || !e.altKey) return;
   const k = e.key.toLowerCase();
   if (k === 'm') { e.preventDefault(); switchMode('markdown'); }
   else if (k === 'p') { e.preventDefault(); switchMode('plain'); }

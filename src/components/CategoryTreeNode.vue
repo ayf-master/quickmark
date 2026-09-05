@@ -153,8 +153,10 @@ async function reorderCategory(fromId, toId) {
   const toIdx = siblingIds.indexOf(toId);
   if (fromIdx < 0 || toIdx < 0) return;
   // 重新排列 ID 顺序
+  // 始终"插到 toIdx 位置", 与从下往上方向一致: 拖到目标 = 换序到目标位置
+  // 原来 fromIdx < toIdx 时用 toIdx - 1, 会让拖到紧邻下一项的操作变成 no-op
   siblingIds.splice(fromIdx, 1);
-  const insertAt = fromIdx < toIdx ? toIdx - 1 : toIdx;
+  const insertAt = toIdx;
   siblingIds.splice(insertAt, 0, fromId);
   // 更新 store.categories 中所有同级分类的 position
   siblingIds.forEach((id, i) => {

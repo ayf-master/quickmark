@@ -126,6 +126,7 @@ async function onLogout() {
   store.editCategoryIds = [];
   store.searchQuery = '';
   store.selectedCategoryId = null;
+  store.clearNoteHistory(); // 清导航历史, 避免下一个用户看到上一个用户的栈
   // 切回登录页
   loggedIn.value = false;
 }

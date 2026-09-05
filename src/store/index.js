@@ -62,6 +62,11 @@ export const store = reactive({
   backlinkPanelVisible: true,  // 反向链接面板展开
   knowledgeGraphVisible: false, // 知识图谱浮层
 
+  // 笔记导航历史 (用于"回到上一条笔记")
+  // 栈结构: 进入新笔记时把当前 editingNote.id 推入; 回退时弹栈打开
+  // 上限 30 条, 超过自动丢最早
+  noteHistory: [],
+
   // ===== Theme =====
   theme: 'light', // 'light' | 'dark'
 
@@ -451,7 +456,8 @@ export const store = reactive({
         payload.category_ids = [categoryId];
       }
       const note = await API.createNote(payload);
-      store.notes.unshift({
+      // 追加到末尾 (与后端 position = max+1 一致), 新笔记出现在列表下方
+      store.notes.push({
         ...note,
         category_ids: note.category_ids || [],
         category_names: []
@@ -464,7 +470,29 @@ export const store = reactive({
     }
   },
 
-  openNote(note) {
+  openNote(note, options = {}) {
+    // 进入新笔记: 把当前编辑笔记推入历史栈 (供 goBackToPreviousNote 回退)
+    // 注意: 创建新笔记 / 初次打开不推空栈; goBackToPreviousNote 也要走 pushHistory: false
+    // 否则回退会把"当前笔记"又压回去, 栈永远不清
+    const { pushHistory = true } = options;
+    const prevId = store.editingNote ? store.editingNote.id : null;
+
+    // 切到新笔记前, 把当前编辑的笔记先保存 (fire-and-forget, 不阻塞)
+    // 解决"切笔记丢修改"问题: 之前点 NoteCard 直接 openNote(B), 老笔记 A 的最后编辑
+    // 在 setEditContent(B.content) 时被覆盖, 且 scheduleAutoSave 的 1s 闭包里 noteId
+    // 已经是 B → A 永远没机会被保存 (用户感知"保存失效")
+    // 改成这里 fire-and-forget 同步快照保存, 走完后 cancelAutoSave 防止与新笔记 timer 冲突
+    if (prevId && prevId !== note.id) {
+      // fire-and-forget: async 一定返回 Promise, .catch 兜底防 unhandled rejection
+      store._persistCurrentEdit().catch(err => console.warn('切换前保存失败:', err));
+      store.cancelAutoSave();
+    }
+
+    if (pushHistory && prevId && prevId !== note.id) {
+      store.noteHistory.push(prevId);
+      // 上限 30 条, 超过丢最早的
+      while (store.noteHistory.length > 30) store.noteHistory.shift();
+    }
     store.editingNote = { ...note };
     store.editTitle = note.title || '';
     store.editPlanData = note.planData ? (typeof note.planData === 'string' ? JSON.parse(note.planData) : note.planData) : null;
@@ -521,6 +549,84 @@ export const store = reactive({
     if (mode !== 'plain' && mode !== 'markdown') return;
     if (store.editMode === mode) return;
     store.editMode = mode;
+  },
+
+  // 回到上一条笔记: 弹出历史栈最顶上一条, 找到后用 openNote 打开
+  // 若栈空 → false; 笔记已被删除 (store.notes 找不到) → 调 API.getNote 拉一次再开
+  // 覆盖"切了分类后回退到老分类笔记"场景 (loadNotes 只加载当前分类的笔记, 但 DB 还在)
+  async goBackToPreviousNote() {
+    if (store.noteHistory.length === 0) return false;
+    const prevId = store.noteHistory.pop();
+    let target = store.notes.find(n => n.id === prevId);
+    if (!target) {
+      // store.notes 找不到: 先从 API 拉 (可能是跨分类的笔记)
+      try {
+        target = await API.getNote(prevId);
+      } catch (e) {
+        store.showToast('上一条笔记已不存在', 'error');
+        // 跳过这条, 递归往下找
+        if (store.noteHistory.length > 0) {
+          return store.goBackToPreviousNote();
+        }
+        return false;
+      }
+      if (!target) {
+        if (store.noteHistory.length > 0) return store.goBackToPreviousNote();
+        return false;
+      }
+    }
+    // pushHistory: false - 回退不再把"当前"压回去, 否则栈会无限来回
+    store.openNote(target, { pushHistory: false });
+    return true;
+  },
+
+  // 清空导航历史 (登出时调用, 避免下一个用户看到上一个用户的栈)
+  clearNoteHistory() {
+    store.noteHistory = [];
+  },
+
+  // 切换笔记前 fire-and-forget 保存当前编辑 (不阻塞 openNote)
+  // 与 closeEditor 的差别: 这里不清空 editingNote/editingContent (因为 openNote 会立即覆盖)
+  // 含 qm-links 标记序列化, 字段一致
+  // 用 async/await 而不是 .then(): await 一个非 Promise 值 (如测试 mock 返回 undefined)
+  // 也是合法的, 天然防御, 不会因为 API 返回非 Promise 就崩
+  async _persistCurrentEdit() {
+    if (!store.editingNote || !store.editingNote.id) return;
+    // 关键: 必须在 await 之前快照所有状态
+    // 调用方 openNote 是 fire-and-forget, await 返回时 store.editTitle / editCategoryIds
+    // 已经被换成"新笔记"的值了, 若此时再读会污染老笔记的本地条目
+    const noteId = store.editingNote.id;
+    const snapTitle = store.editTitle || '无标题';
+    const snapCategoryIds = [...(store.editCategoryIds || [])];
+    let content = store.editContent || '';
+    const links = [...store.editLinks];
+    if (links.length > 0) {
+      content = content.replace(/<!--\s*qm-links:[\s\S]*?-->\s*/g, '').trim()
+        + '\n<!-- qm-links:' + JSON.stringify(links) + ' -->';
+    }
+    try {
+      await API.updateNote(noteId, {
+        title: snapTitle,
+        content,
+        category_ids: snapCategoryIds
+      });
+      // 同步本地 store 状态, 防止 loadNotes() 覆盖丢失
+      const idx = store.notes.findIndex(n => n.id === noteId);
+      if (idx !== -1) {
+        const catNames = snapCategoryIds
+          .map(cid => store.categories.find(c => c.id === cid)?.name)
+          .filter(Boolean);
+        store.notes[idx] = {
+          ...store.notes[idx],
+          title: snapTitle,
+          content,
+          category_ids: [...snapCategoryIds],
+          category_names: catNames
+        };
+      }
+    } catch (err) {
+      console.warn('切换前保存老笔记失败:', err);
+    }
   },
 
   closeEditor() {
@@ -581,28 +687,30 @@ export const store = reactive({
     const data = {
       title: store.editTitle || '无标题',
       content: content,
-      category_ids: store.editCategoryIds,
+      category_ids: [...(store.editCategoryIds || [])],
       planData: store.editPlanData || null
     };
+    // 快照: await 之后 store.editCategoryIds 可能已被切换笔记改掉
+    const snapCategoryIds = [...data.category_ids];
     try {
       const result = await API.updateNote(noteId, data);
       // 用 try-catch 包裹写入操作, 防止 editingNote 已被 closeEditor 置空时抛错
       try {
         if (store.editingNote && store.editingNote.id === noteId) {
           Object.assign(store.editingNote, result, {
-            category_ids: store.editCategoryIds
+            category_ids: snapCategoryIds
           });
         }
         const idx = store.notes.findIndex(n => n.id === noteId);
         if (idx !== -1) {
-          const catNames = store.editCategoryIds
+          const catNames = snapCategoryIds
             .map(cid => store.categories.find(c => c.id === cid)?.name)
             .filter(Boolean);
           store.notes[idx] = {
             ...store.notes[idx],
             title: data.title,
             content: data.content,
-            category_ids: [...store.editCategoryIds],
+            category_ids: [...snapCategoryIds],
             category_names: catNames,
             planData: data.planData
           };

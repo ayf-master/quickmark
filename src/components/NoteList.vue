@@ -240,7 +240,9 @@ async function reorderNotes(fromId, toId) {
   const toIdx = sorted.findIndex(n => n.id === toId);
   if (fromIdx < 0 || toIdx < 0) return;
   const [moved] = sorted.splice(fromIdx, 1);
-  const insertAt = fromIdx < toIdx ? toIdx - 1 : toIdx;
+  // 始终"插到 toIdx 位置": 拖到目标 = 换序到目标位置 (与 CategoryTreeNode 保持一致)
+  // 原来 fromIdx < toIdx 时用 toIdx - 1, 会让拖到紧邻下一项的操作变成 no-op
+  const insertAt = toIdx;
   sorted.splice(insertAt, 0, moved);
   // 更新 position 并写回 store
   sorted.forEach((n, i) => { n.position = i; });
