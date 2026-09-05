@@ -342,9 +342,15 @@ app.post('/api/notes', async (req, res) => {
     }
     const { title, content, category_ids } = req.body;
     if (!title || !title.trim()) return res.status(400).json({ error: '标题不能为空' });
+    // 与 Prisma 分支一致: 新笔记 position 取最大值 + 1, 排在列表末尾
+    const [maxRow] = await pool.query(
+      'SELECT COALESCE(MAX(`position`), -1) AS max_pos FROM notes WHERE user_id = ?',
+      [POOL_FALLBACK_USER_ID]
+    );
+    const nextPos = (maxRow[0]?.max_pos ?? -1) + 1;
     const [result] = await pool.query(
-      'INSERT INTO notes (title, content, user_id) VALUES (?, ?, ?)',
-      [title.trim(), content || '', POOL_FALLBACK_USER_ID]
+      'INSERT INTO notes (title, content, user_id, `position`) VALUES (?, ?, ?, ?)',
+      [title.trim(), content || '', POOL_FALLBACK_USER_ID, nextPos]
     );
     const noteId = result.insertId;
     if (category_ids && category_ids.length > 0) {

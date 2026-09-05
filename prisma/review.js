@@ -40,6 +40,10 @@ async function bumpStreak(userId, prisma) {
   return streak;
 }
 
+// 新卡首次到期天数: 与 sm2.js 中 reps=0 的首次间隔保持一致 (1 天)
+// 用 gradeCard 推导而不是写死, 以后改 SM-2 参数时这里会自动跟随, 不会脱节
+const NEW_CARD_DUE_DAYS = gradeCard({ easeFactor: 2.5, interval: 0, reps: 0 }, 4).dueInDays;
+
 // 注册复习: 为一篇笔记建一张 ReviewCard (已有则忽略)
 async function enrollNote(userId, noteId, prisma) {
   const nid = parseInt(noteId);
@@ -47,8 +51,12 @@ async function enrollNote(userId, noteId, prisma) {
   if (!note) return { error: 'not_found' };
   const existing = await prisma.reviewCard.findFirst({ where: { noteId: nid, userId } });
   if (existing) return { card: existing, created: false };
+  // 新卡按 SM-2 首次间隔 (1 天后) 安排, 让记忆先沉淀一天
+  // 原实现 dueDate: new Date() 会让刚创建的笔记立刻出现在"到期复习"里
+  const due = new Date();
+  due.setDate(due.getDate() + NEW_CARD_DUE_DAYS);
   const card = await prisma.reviewCard.create({
-    data: { noteId: nid, userId, dueDate: new Date() }
+    data: { noteId: nid, userId, dueDate: due }
   });
   return { card, created: true };
 }

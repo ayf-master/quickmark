@@ -217,11 +217,21 @@ async function createNote(userId, { title, content, category_ids }, prisma) {
       throw err;
     }
   }
+  // 新笔记排在列表末尾: position 取当前用户最大值 + 1
+  // 原实现不设 position, 走 schema 默认值 0, 配合 orderBy position asc + updatedAt desc
+  // 会让新笔记排到最前面, 与"新增内容在下面"的预期相反
+  const maxPos = await prisma.note.aggregate({
+    where: { userId },
+    _max: { position: true }
+  });
+  const nextPosition = (maxPos._max.position ?? -1) + 1;
+
   const note = await prisma.note.create({
     data: {
       title: title.trim(),
       content: content || '',
       userId,
+      position: nextPosition,
       categories: category_ids && category_ids.length > 0
         ? { create: category_ids.map(cid => ({ categoryId: cid })) }
         : undefined
