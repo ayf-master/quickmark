@@ -563,6 +563,8 @@ export const store = reactive({
     if (store.noteHistory.length === 0) return false;
     const prevId = store.noteHistory.pop();
     let target = store.notes.find(n => n.id === prevId);
+    // 当前列表里没有 = 跨分类, 或被搜索条件过滤掉了
+    const needReload = !target;
     if (!target) {
       // store.notes 找不到: 先从 API 拉 (可能是跨分类的笔记)
       try {
@@ -579,6 +581,21 @@ export const store = reactive({
         if (store.noteHistory.length > 0) return store.goBackToPreviousNote();
         return false;
       }
+    }
+    // 跨分类回退: 分类栏和笔记列表都要跟着切过去
+    // 否则编辑器打开了目标笔记, 但侧栏仍停在原分类、列表里也看不到它
+    if (needReload) {
+      const catId = target.category_ids && target.category_ids.length
+        ? target.category_ids[0]
+        : null;
+      store.selectedCategoryId = catId; // 无分类则回到"全部笔记"
+      store.searchQuery = '';           // 清掉搜索词, 否则目标笔记可能仍被过滤
+      try {
+        await store.loadNotes();
+      } catch (e) {
+        // 列表加载失败不阻断打开笔记, 用 API 拿到的对象兜底
+      }
+      target = store.notes.find(n => n.id === prevId) || target;
     }
     // pushHistory: false - 回退不再把"当前"压回去, 否则栈会无限来回
     store.openNote(target, { pushHistory: false });

@@ -344,6 +344,30 @@ describe('store - noteHistory', () => {
     expect(store.editingNote.title).toBe('A-其他分类');
   });
 
+  it('goBackToPreviousNote 跨分类时切换分类栏并重载列表', async () => {
+    // 当前停在分类 5, 历史栈里是分类 9 的笔记 A
+    store.notes = [{ id: 3, title: 'C', content: '', category_ids: [5] }];
+    store.selectedCategoryId = 5;
+    store.searchQuery = 'abc'; // 还应被清掉, 否则目标笔记可能仍被过滤
+    API.getNote.mockResolvedValue({ id: 1, title: 'A-其他分类', content: '', category_ids: [9] });
+    API.getNotes.mockResolvedValue([
+      { id: 1, title: 'A-其他分类', content: '', category_ids: [9] },
+      { id: 2, title: 'B-同分类', content: '', category_ids: [9] },
+    ]);
+    store.editingNote = { ...store.notes[0] };
+    store.noteHistory.push(1);
+
+    const ok = await store.goBackToPreviousNote();
+    expect(ok).toBe(true);
+    expect(store.selectedCategoryId).toBe(9);      // 分类栏跟过去了
+    expect(store.searchQuery).toBe('');            // 搜索词被清掉
+    expect(store.notes.some(n => n.id === 1)).toBe(true); // 列表含目标笔记
+    expect(API.getNotes).toHaveBeenCalledWith({ category_id: 9 });
+    expect(store.editingNote.id).toBe(1);
+
+    API.getNotes.mockResolvedValue([]); // 还原, 避免影响后续用例
+  });
+
   it('goBackToPreviousNote skips notes that API also cannot find', async () => {
     API.getNote.mockRejectedValue(new Error('404'));
     store.notes = [{ id: 3, title: 'C', content: '', category_ids: [] }];
