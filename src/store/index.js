@@ -120,7 +120,12 @@ export const store = reactive({
     }
     function build(parentKey, depth) {
       const children = byParent.get(parentKey) || [];
-      children.sort((a, b) => (a.position || 0) - (b.position || 0));
+      // position 相同 (常见于老数据 / 未拖拽排序过的) 时按名称兜底,
+      // 保证顺序稳定可预期, 否则同级分类的先后会随数组插入顺序漂移
+      children.sort((a, b) =>
+        (a.position || 0) - (b.position || 0) ||
+        String(a.name || '').localeCompare(String(b.name || ''), 'zh-CN')
+      );
       return children.map(c => ({
         ...c,
         depth,

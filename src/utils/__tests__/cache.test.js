@@ -34,8 +34,11 @@ describe('cache module (graceful degradation)', () => {
     cache.init('redis://localhost:6379');
     await new Promise(r => setTimeout(r, 50));
 
+    // 用唯一 key: mock 的 store Map 在同一次运行的多个用例/文件间是共享的,
+    // 固定 key 会被上一次写入的缓存命中, 导致 fn 根本没被调用 (测试偶发失败)
+    const key = 'wrap-connected-' + Date.now() + '-' + Math.random().toString(36).slice(2);
     const fn = vi.fn().mockResolvedValue({ data: 'test' });
-    const result = await cache.wrap('test-key', 60, fn);
+    const result = await cache.wrap(key, 60, fn);
     expect(result).toEqual({ data: 'test' });
     expect(fn).toHaveBeenCalledTimes(1);
   });
