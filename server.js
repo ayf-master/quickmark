@@ -494,9 +494,9 @@ app.get('/api/categories', async (req, res) => {
       return res.json(await require('./prisma/dal').listCategories(req.user.id, prisma));
     }
     const [rows] = await pool.query(`
-      SELECT c.id, c.name, c.color, c.parent_id, c.created_at, c.updated_at
+      SELECT c.id, c.name, c.color, c.parent_id, c.position, c.created_at, c.updated_at
       FROM categories c
-      ORDER BY c.parent_id IS NULL DESC, c.parent_id, c.name
+      ORDER BY c.parent_id IS NULL DESC, c.parent_id, c.position, c.name
     `);
     const allIds = rows.map(r => r.id);
     const countMap = await getCategoryNoteCounts(allIds);

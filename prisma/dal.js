@@ -332,6 +332,9 @@ async function listCategories(userId, prisma) {
     name: r.name,
     color: r.color,
     parent_id: r.parentId,
+    // 必须回传 position: 前端靠它还原用户拖拽出来的顺序。
+    // 缺这个字段前端全是 undefined → 退化成按名称排序 → 刷新后顺序"回到原样"
+    position: r.position ?? 0,
     created_at: r.createdAt,
     updated_at: r.updatedAt,
     note_count: countMap[r.id] || 0

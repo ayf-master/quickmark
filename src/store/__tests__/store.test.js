@@ -368,6 +368,50 @@ describe('store - noteHistory', () => {
     API.getNotes.mockResolvedValue([]); // 还原, 避免影响后续用例
   });
 
+  it('goForwardToNextNote 反撤回到刚才回退的笔记', async () => {
+    store.notes = [
+      { id: 1, title: 'A', content: '', category_ids: [] },
+      { id: 2, title: 'B', content: '', category_ids: [] },
+    ];
+    store.noteForward = [];
+    store.openNote(store.notes[0]); // 打开 A
+    store.openNote(store.notes[1]); // 打开 B, 历史栈 [1]
+    expect(store.editingNote.id).toBe(2);
+
+    await store.goBackToPreviousNote(); // 回到 A
+    expect(store.editingNote.id).toBe(1);
+    expect(store.noteForward).toEqual([2]); // B 进了前进栈
+
+    const ok = await store.goForwardToNextNote(); // 反撤回: 回到 B
+    expect(ok).toBe(true);
+    expect(store.editingNote.id).toBe(2);
+    expect(store.noteForward).toEqual([]);
+    // 前进时当前笔记要压回历史栈, 这样还能再退回去
+    expect(store.noteHistory).toEqual([1]);
+  });
+
+  it('goForwardToNextNote on empty forward stack returns false', async () => {
+    store.noteForward = [];
+    expect(await store.goForwardToNextNote()).toBe(false);
+  });
+
+  it('主动打开新笔记会清空前进栈 (同浏览器行为)', async () => {
+    store.notes = [
+      { id: 1, title: 'A', content: '', category_ids: [] },
+      { id: 2, title: 'B', content: '', category_ids: [] },
+      { id: 3, title: 'C', content: '', category_ids: [] },
+    ];
+    store.noteForward = [];
+    store.openNote(store.notes[0]);
+    store.openNote(store.notes[1]);
+    await store.goBackToPreviousNote();
+    expect(store.noteForward.length).toBe(1);
+
+    // 用户主动点了 C (不是回退/前进), 前进栈应作废
+    store.openNote(store.notes[2]);
+    expect(store.noteForward).toEqual([]);
+  });
+
   it('goBackToPreviousNote skips notes that API also cannot find', async () => {
     API.getNote.mockRejectedValue(new Error('404'));
     store.notes = [{ id: 3, title: 'C', content: '', category_ids: [] }];

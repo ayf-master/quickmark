@@ -22,6 +22,16 @@
             <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 10h11a5 5 0 010 10H9m0-10l4-4M9 6l-4 4"/>
           </svg>
         </button>
+        <!-- 反撤回: 前进到下一条 (前进栈非空时显示) -->
+        <button v-if="store.editingNote && store.noteForward.length > 0"
+          class="btn btn-icon-sm btn-ghost flex-shrink-0"
+          @click="goForwardToNext"
+          :title="'前进到下一条笔记 (Alt+→)' + (nextNoteTitle ? ' · ' + nextNoteTitle : '')"
+          aria-label="前进到下一条笔记">
+          <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 10H10a5 5 0 000 10h5m0-10l-4-4m4 4l-4 4"/>
+          </svg>
+        </button>
         <button v-if="store.isCompact"
           class="btn btn-icon-sm btn-ghost flex-shrink-0"
           @click="store.closeEditor()"
@@ -541,10 +551,20 @@ const prevNoteTitle = computed(() => {
   const n = store.notes.find(x => x.id === lastId);
   return n ? n.title || '无标题' : '';
 });
-function goBackToPrev() {
-  if (!store.goBackToPreviousNote()) {
-    // 栈空 / 全删, 不弹 toast (按钮本就是 disabled 状态)
-  }
+// goBackToPreviousNote 是 async, 返回的是 Promise, 不能用 !promise 判断成败
+async function goBackToPrev() {
+  await store.goBackToPreviousNote();
+}
+
+// ===== 反撤回: 前进到下一条笔记 =====
+const nextNoteTitle = computed(() => {
+  const lastId = store.noteForward[store.noteForward.length - 1];
+  if (!lastId) return '';
+  const n = store.notes.find(x => x.id === lastId);
+  return n ? n.title || '无标题' : '';
+});
+async function goForwardToNext() {
+  await store.goForwardToNextNote();
 }
 
 async function markReviewed() {
@@ -697,9 +717,25 @@ function removeLink(index) {
   store.editLinks.splice(index, 1);
   store.scheduleAutoSave();
 }
-function openLinkNote(title) {
-  const note = findNoteByTitle(store.notes, title);
-  if (note) store.openNote(note);
+async function openLinkNote(title) {
+  let note = findNoteByTitle(store.notes, title);
+  if (!note) {
+    // 当前列表里没有: 链接的笔记可能在别的分类下 → 用搜索找
+    try {
+      const results = await API.getNotes({ search: title });
+      // 搜索是模糊匹配, 优先取标题完全一致的那条
+      note = (results || []).find(n => n.title === title) || (results || [])[0];
+    } catch (e) {
+      store.showToast('查找链接笔记失败', 'error');
+      return;
+    }
+  }
+  if (!note) {
+    store.showToast('未找到笔记: ' + title, 'error');
+    return;
+  }
+  // 分类栏 + 笔记列表一并切到目标笔记所在分类
+  await store.openNoteFromElsewhere(note);
 }
 function handleLinkBackspace(e) {
   if (linkInputText.value === '' && store.editLinks.length > 0) {
@@ -1789,6 +1825,7 @@ onBeforeUnmount(() => {
 // 全局快捷键:
 //   Ctrl/Cmd+Alt+M/P 切模式
 //   Alt+左方向键      回到上一条笔记 (栈非空时)
+//   Alt+右方向键      前进 / 反撤回 (前进栈非空时)
 function onKeydown(e) {
   if (!isAlive || !store.editingNote) return;
   // Alt+左 = 回到上一条
@@ -1796,6 +1833,14 @@ function onKeydown(e) {
     if (store.noteHistory.length > 0) {
       e.preventDefault();
       goBackToPrev();
+    }
+    return;
+  }
+  // Alt+右 = 反撤回 (前进)
+  if (e.altKey && e.key === 'ArrowRight' && !e.ctrlKey && !e.metaKey) {
+    if (store.noteForward.length > 0) {
+      e.preventDefault();
+      goForwardToNext();
     }
     return;
   }

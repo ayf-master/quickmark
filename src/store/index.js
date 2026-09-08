@@ -66,6 +66,9 @@ export const store = reactive({
   // 栈结构: 进入新笔记时把当前 editingNote.id 推入; 回退时弹栈打开
   // 上限 30 条, 超过自动丢最早
   noteHistory: [],
+  // 前进栈 ("反撤回"): 回退时把当前笔记压入, 前进时弹出
+  // 一旦用户点了新笔记 (非回退/前进产生的跳转), 前进栈要清空 (同浏览器行为)
+  noteForward: [],
 
   // ===== Theme =====
   theme: 'light', // 'light' | 'dark'
@@ -497,6 +500,8 @@ export const store = reactive({
       store.noteHistory.push(prevId);
       // 上限 30 条, 超过丢最早的
       while (store.noteHistory.length > 30) store.noteHistory.shift();
+      // 用户主动跳到别的笔记 → 前进栈作废 (同浏览器: 新导航会清掉 forward 历史)
+      store.noteForward = [];
     }
     store.editingNote = { ...note };
     store.editTitle = note.title || '';
@@ -556,6 +561,30 @@ export const store = reactive({
     store.editMode = mode;
   },
 
+  // 打开一条「可能不在当前笔记列表里」的笔记 (跨分类 / 被搜索条件过滤掉)
+  // 会先把分类栏和列表切到它所属分类, 否则编辑器打开了、侧栏列表里却看不到它
+  // 用法: 回退上一笔记 / 点击 Wiki 链接跳转 等"跳到任意笔记"的场景
+  async openNoteFromElsewhere(note, options = {}) {
+    if (!note) return false;
+    if (store.notes.some(n => n.id === note.id)) {
+      store.openNote(note, options);
+      return true;
+    }
+    const catId = note.category_ids && note.category_ids.length
+      ? note.category_ids[0]
+      : null;
+    store.selectedCategoryId = catId; // 无分类则回到「全部笔记」
+    store.searchQuery = '';           // 清掉搜索词, 否则目标可能仍被过滤
+    try {
+      await store.loadNotes();
+    } catch (e) {
+      // 列表加载失败不阻断打开笔记, 用传入的对象兜底
+    }
+    const target = store.notes.find(n => n.id === note.id) || note;
+    store.openNote(target, options);
+    return true;
+  },
+
   // 回到上一条笔记: 弹出历史栈最顶上一条, 找到后用 openNote 打开
   // 若栈空 → false; 笔记已被删除 (store.notes 找不到) → 调 API.getNote 拉一次再开
   // 覆盖"切了分类后回退到老分类笔记"场景 (loadNotes 只加载当前分类的笔记, 但 DB 还在)
@@ -563,8 +592,6 @@ export const store = reactive({
     if (store.noteHistory.length === 0) return false;
     const prevId = store.noteHistory.pop();
     let target = store.notes.find(n => n.id === prevId);
-    // 当前列表里没有 = 跨分类, 或被搜索条件过滤掉了
-    const needReload = !target;
     if (!target) {
       // store.notes 找不到: 先从 API 拉 (可能是跨分类的笔记)
       try {
@@ -582,29 +609,48 @@ export const store = reactive({
         return false;
       }
     }
-    // 跨分类回退: 分类栏和笔记列表都要跟着切过去
-    // 否则编辑器打开了目标笔记, 但侧栏仍停在原分类、列表里也看不到它
-    if (needReload) {
-      const catId = target.category_ids && target.category_ids.length
-        ? target.category_ids[0]
-        : null;
-      store.selectedCategoryId = catId; // 无分类则回到"全部笔记"
-      store.searchQuery = '';           // 清掉搜索词, 否则目标笔记可能仍被过滤
-      try {
-        await store.loadNotes();
-      } catch (e) {
-        // 列表加载失败不阻断打开笔记, 用 API 拿到的对象兜底
-      }
-      target = store.notes.find(n => n.id === prevId) || target;
+    // 回退时当前笔记要压进"前进栈", 供 goForwardToNextNote 反撤回
+    const curId = store.editingNote ? store.editingNote.id : null;
+    if (curId && curId !== target.id) {
+      store.noteForward.push(curId);
+      while (store.noteForward.length > 30) store.noteForward.shift();
     }
-    // pushHistory: false - 回退不再把"当前"压回去, 否则栈会无限来回
-    store.openNote(target, { pushHistory: false });
+    // pushHistory: false - 回退不再把"当前"又压回历史栈, 否则会无限来回
+    await store.openNoteFromElsewhere(target, { pushHistory: false });
+    return true;
+  },
+
+  // 反撤回: 前进到刚才被回退掉的那条笔记 (前进栈)
+  async goForwardToNextNote() {
+    if (store.noteForward.length === 0) return false;
+    const nextId = store.noteForward.pop();
+    let target = store.notes.find(n => n.id === nextId);
+    if (!target) {
+      try {
+        target = await API.getNote(nextId);
+      } catch (e) {
+        if (store.noteForward.length > 0) return store.goForwardToNextNote();
+        return false;
+      }
+      if (!target) {
+        if (store.noteForward.length > 0) return store.goForwardToNextNote();
+        return false;
+      }
+    }
+    // 前进时当前笔记要压回历史栈, 这样再点"回退"能原路返回
+    const curId = store.editingNote ? store.editingNote.id : null;
+    if (curId && curId !== target.id) {
+      store.noteHistory.push(curId);
+      while (store.noteHistory.length > 30) store.noteHistory.shift();
+    }
+    await store.openNoteFromElsewhere(target, { pushHistory: false });
     return true;
   },
 
   // 清空导航历史 (登出时调用, 避免下一个用户看到上一个用户的栈)
   clearNoteHistory() {
     store.noteHistory = [];
+    store.noteForward = [];
   },
 
   // 切换笔记前 fire-and-forget 保存当前编辑 (不阻塞 openNote)
