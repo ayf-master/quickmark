@@ -230,14 +230,34 @@
               </button>
             </span>
           </template>
-          <input ref="linkInputRef"
-            v-model="linkInputText"
-            @keydown.enter.prevent="addLink"
-            @keydown.backspace="handleLinkBackspace"
-            @paste.prevent="handleLinkPaste"
-            placeholder="输入标题后回车添加链接..."
-            class="flex-1 min-w-[120px] bg-transparent text-xs outline-none"
-            style="color: var(--text-secondary);" />
+          <div class="relative flex-1 min-w-[120px]">
+            <input ref="linkInputRef"
+              v-model="linkInputText"
+              @keydown.enter.prevent="onLinkEnter"
+              @keydown.arrow-down.prevent="moveLinkSuggestion(1)"
+              @keydown.arrow-up.prevent="moveLinkSuggestion(-1)"
+              @keydown.esc="linkSuggestions = []; linkSuggestIndex = -1"
+              @keydown.backspace="handleLinkBackspace"
+              @paste.prevent="handleLinkPaste"
+              @blur="hideLinkSuggestions"
+              placeholder="输入标题搜索笔记，回车添加链接..."
+              class="w-full bg-transparent text-xs outline-none"
+              style="color: var(--text-secondary);" />
+            <!-- 候选下拉: 输入部分标题 → 模糊匹配已有笔记 -->
+            <div v-if="linkSuggestions.length > 0"
+              class="absolute left-0 right-0 top-full mt-1 z-30 rounded-lg overflow-hidden max-h-56 overflow-y-auto shadow-lg"
+              style="background: var(--bg-elevated, var(--bg-card, #fff)); border: 1px solid var(--border-subtle);">
+              <button v-for="(s, i) in linkSuggestions" :key="s.id" type="button"
+                class="w-full text-left px-3 py-2 text-xs truncate"
+                :style="i === linkSuggestIndex
+                  ? 'background: var(--color-primary-bg, rgba(99,102,241,.12)); color: var(--text-primary);'
+                  : 'color: var(--text-secondary);'"
+                @mousedown.prevent="pickLinkSuggestion(s)"
+                @mouseenter="linkSuggestIndex = i">
+                {{ s.title || '无标题' }}
+              </button>
+            </div>
+          </div>
         </div>
       </div>
 
@@ -703,6 +723,71 @@ watch(fullscreenImage, (val) => {
 });
 
 // Wiki 链接编辑
+
+// ===== 链接输入自动补全: 输入部分标题 → 跨分类模糊搜索已有笔记 =====
+const linkSuggestions = ref([]);
+const linkSuggestIndex = ref(-1);
+let linkSuggestTimer = null;
+
+watch(linkInputText, (val) => {
+  clearTimeout(linkSuggestTimer);
+  const q = (val || '').trim();
+  if (!q) {
+    linkSuggestions.value = [];
+    linkSuggestIndex.value = -1;
+    return;
+  }
+  // 250ms 防抖, 避免每敲一个字就打一次搜索接口
+  linkSuggestTimer = setTimeout(async () => {
+    try {
+      const results = await API.getNotes({ search: q });
+      linkSuggestions.value = (results || [])
+        // 排除已添加过的和当前笔记自身
+        .filter(n => n.id !== store.editingNote?.id
+          && !store.editLinks.some(l => l.title === n.title))
+        .slice(0, 8);
+      linkSuggestIndex.value = linkSuggestions.value.length ? 0 : -1;
+    } catch (e) {
+      linkSuggestions.value = [];
+    }
+  }, 250);
+});
+
+// Enter: 有候选时 = 选中高亮项; 没有候选 = 按原文添加 (保留旧行为)
+function onLinkEnter() {
+  if (linkSuggestions.value.length > 0 && linkSuggestIndex.value >= 0) {
+    pickLinkSuggestion(linkSuggestions.value[linkSuggestIndex.value]);
+    return;
+  }
+  addLink();
+}
+
+function moveLinkSuggestion(dir) {
+  const n = linkSuggestions.value.length;
+  if (!n) return;
+  linkSuggestIndex.value = (linkSuggestIndex.value + dir + n) % n;
+}
+
+function pickLinkSuggestion(note) {
+  if (!note) return;
+  if (!store.editLinks.some(l => l.title === note.title)) {
+    store.editLinks.push({ title: note.title, annotation: '' });
+    store.scheduleAutoSave();
+  }
+  linkInputText.value = '';
+  linkSuggestions.value = [];
+  linkSuggestIndex.value = -1;
+  nextTick(() => linkInputRef.value?.focus());
+}
+
+// blur 延迟清空: 给 mousedown.prevent 的候选点击留出触发时间
+function hideLinkSuggestions() {
+  setTimeout(() => {
+    linkSuggestions.value = [];
+    linkSuggestIndex.value = -1;
+  }, 150);
+}
+
 function addLink() {
   const title = linkInputText.value.trim();
   if (!title) return;
