@@ -14,9 +14,10 @@
     role="navigation"
     aria-label="侧边导航"
     :aria-modal="store.isMobile ? 'true' : 'false'">
-    <!-- 顶部工具栏: 折叠/展开按钮 (避免与 AppHeader 顶部 logo 重复) -->
-    <div v-if="store.isDesktop" class="px-3 py-3 flex-shrink-0 flex justify-end"
+    <!-- 顶部栏目标题头: 与笔记列表/编辑器的头部同高 (h-14), 三栏视觉对齐 -->
+    <div v-if="store.isDesktop" class="h-14 flex-shrink-0 flex items-center justify-between px-5"
       style="border-bottom: 1px solid var(--border-default);">
+      <h2 class="text-lg font-semibold" style="color: var(--text-primary);">分类</h2>
       <button
         class="btn btn-icon-sm btn-ghost"
         @click="store.sidebarCollapsed = !store.sidebarCollapsed"

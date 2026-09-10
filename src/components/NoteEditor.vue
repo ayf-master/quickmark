@@ -5,8 +5,8 @@
     role="region"
     aria-label="笔记编辑器">
 
-    <!-- 顶部工具栏 -->
-    <header class="flex items-center justify-between px-4 sm:px-6 py-3 flex-shrink-0 gap-2 flex-wrap"
+    <!-- 顶部工具栏: 与侧栏/列表头部同高 (min-h-14, 内容多时允许换行加高) -->
+    <header class="min-h-14 flex items-center justify-between px-5 py-2 flex-shrink-0 gap-2 flex-wrap"
       style="border-bottom: 1px solid var(--border-default); background: var(--bg-panel);"
       data-tour="editor">
 

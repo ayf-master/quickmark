@@ -6,19 +6,19 @@
     aria-label="笔记列表"
       data-tour="note-list">
     <!-- Header: 搜索 + 标题 + 收藏过滤 -->
-    <header class="px-6 py-4 flex-shrink-0"
+    <header class="h-14 px-5 flex-shrink-0 flex items-center justify-between gap-3"
       style="border-bottom: 1px solid var(--border-default);">
-      <div class="flex items-center justify-between gap-3">
-        <div class="min-w-0 flex-1">
-          <h2 class="text-lg font-semibold truncate"
-            style="color: var(--text-primary);"
-            v-text="store.listTitle"></h2>
-          <p class="text-xs mt-0.5" style="color: var(--text-tertiary);">
-            {{ (Array.isArray(store.filteredNotes) ? store.filteredNotes.length : 0) }} 条笔记
-          </p>
-        </div>
+      <!-- 与侧栏/编辑器头部同高 (h-14), 标题 + 条数 + 操作按钮单行对齐 -->
+      <div class="min-w-0 flex items-baseline gap-2">
+        <h2 class="text-lg font-semibold truncate"
+          style="color: var(--text-primary);"
+          v-text="store.listTitle"></h2>
+        <span class="text-xs flex-shrink-0" style="color: var(--text-tertiary);">
+          {{ (Array.isArray(store.filteredNotes) ? store.filteredNotes.length : 0) }} 条
+        </span>
+      </div>
         <button
-          class="btn btn-icon btn-ghost"
+          class="btn btn-icon-sm btn-ghost"
           :class="{ 'is-active': store.showPinnedOnly }"
           :title="store.showPinnedOnly ? '显示全部' : '仅显示收藏'"
           :aria-pressed="store.showPinnedOnly"
@@ -40,9 +40,11 @@
             <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 5l7 7-7 7M5 5l7 7-7 7"/>
           </svg>
         </button>
-      </div>
-      <!-- 笔记搜索 (模糊匹配标题+内容, 桌面/平板显示; 手机在顶部栏搜索) -->
-      <div v-if="store.isDesktop || store.isTablet" class="relative mt-3">
+    </header>
+
+    <!-- 笔记搜索 (模糊匹配标题+内容, 桌面/平板显示; 手机在顶部栏搜索) -->
+    <div v-if="store.isDesktop || store.isTablet" class="relative px-5 py-3 flex-shrink-0"
+      style="border-bottom: 1px solid var(--border-default);">
         <input type="text"
           v-model="store.searchQuery"
           @input="store.onSearchInput()"
@@ -66,7 +68,6 @@
           </svg>
         </button>
       </div>
-    </header>
 
     <!-- List / Empty / Skeleton -->
     <div class="flex-1 panel-scroll px-4 py-4">
