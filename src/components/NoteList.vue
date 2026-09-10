@@ -43,8 +43,10 @@
     </header>
 
     <!-- 笔记搜索 (模糊匹配标题+内容, 桌面/平板显示; 手机在顶部栏搜索) -->
-    <div v-if="store.isDesktop || store.isTablet" class="relative px-5 py-3 flex-shrink-0"
+    <!-- 外层只管间距/边框, 内层 relative 承载 input 和绝对定位的图标 (与侧栏搜索框同构) -->
+    <div v-if="store.isDesktop || store.isTablet" class="px-5 py-3 flex-shrink-0"
       style="border-bottom: 1px solid var(--border-default);">
+      <div class="relative">
         <input type="text"
           v-model="store.searchQuery"
           @input="store.onSearchInput()"
@@ -68,6 +70,7 @@
           </svg>
         </button>
       </div>
+    </div>
 
     <!-- List / Empty / Skeleton -->
     <div class="flex-1 panel-scroll px-4 py-4">
