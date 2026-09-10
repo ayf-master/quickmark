@@ -77,6 +77,16 @@ export const store = reactive({
   mobileDrawerOpen: false,
   sidebarCollapsed: false, // 桌面端侧边栏折叠
   noteListCollapsed: false, // 桌面端笔记列表折叠
+
+  // ===== 三栏宽度 (拖拽调节, 持久化到 localStorage) =====
+  // 组件里仍用 var(--sidebar-width) / var(--list-width), 由 App.vue 用内联 style 覆盖
+  // 这样不用改 Sidebar / NoteList 内部, 一处桥接即可
+  sidebarWidth: (() => {
+    try { return parseInt(localStorage.getItem('quickmark-sidebar-width')) || 264; } catch { return 264; }
+  })(),
+  listWidth: (() => {
+    try { return parseInt(localStorage.getItem('quickmark-list-width')) || 340; } catch { return 340; }
+  })(),
   shortcutPanelVisible: false,
   preferencePanelVisible: false,
   userGuideVisible: false,
@@ -429,6 +439,26 @@ export const store = reactive({
     store.searchQuery = '';
     store.mobileDrawerOpen = false;
     store.loadNotes();
+  },
+
+  // ===== 三栏宽度调节 =====
+
+  setSidebarWidth(w) {
+    store.sidebarWidth = Math.round(w);
+    try { localStorage.setItem('quickmark-sidebar-width', String(store.sidebarWidth)); } catch {}
+  },
+
+  setListWidth(w) {
+    store.listWidth = Math.round(w);
+    try { localStorage.setItem('quickmark-list-width', String(store.listWidth)); } catch {}
+  },
+
+  // 恢复默认宽度 (双击分隔条时用)
+  resetLayoutWidths() {
+    store.setSidebarWidth(264);
+    store.setListWidth(340);
+    store.sidebarCollapsed = false;
+    store.noteListCollapsed = false;
   },
 
   togglePinnedFilter() {

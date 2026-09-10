@@ -18,11 +18,28 @@
     <LoginView v-else-if="!loggedIn" :initialError="initialError" @success="onLoginSuccess" />
     <template v-else>
       <AppHeader @logout="onLogout" @openFeedback="feedbackVisible = true" @openFeedbackAdmin="feedbackAdminVisible = true" />
-      <div class="app-layout flex-1 min-h-0">
+      <!-- 三栏宽度由内联 CSS 变量驱动: Sidebar/NoteList 内部仍用 var(--sidebar-width) 等 -->
+      <div class="app-layout flex-1 min-h-0"
+        :style="{
+          '--sidebar-width': store.sidebarWidth + 'px',
+          '--list-width': store.listWidth + 'px'
+        }">
         <Sidebar />
+
+        <!-- 分类栏 | 笔记列表 的分隔条 -->
+        <LayoutResizer v-show="resizingEnabled()"
+          title="拖拽调整分类栏宽度 (双击恢复默认)"
+          @resize="resizeSidebar"
+          @reset="store.resetLayoutWidths()" />
 
         <!-- 笔记列表: 桌面始终显示; 手机/平板编辑时隐藏 (编辑全屏, 保证编辑区宽度) -->
         <NoteList v-show="!store.editingNote || !store.isCompact" />
+
+        <!-- 笔记列表 | 编辑器 的分隔条 -->
+        <LayoutResizer v-show="resizingEnabled() && (!store.editingNote || !store.isCompact)"
+          title="拖拽调整笔记列表宽度 (双击恢复默认)"
+          @resize="resizeList"
+          @reset="store.resetLayoutWidths()" />
 
         <!-- 编辑器: 桌面/平板始终显示(空态时占位); 手机仅编辑时显示 -->
         <NoteEditor v-if="store.editingNote" v-show="store.isDesktop || store.isCompact" />
@@ -74,6 +91,7 @@ import FeedbackDialog from '@/components/FeedbackDialog.vue';
 import FeedbackAdmin from '@/components/FeedbackAdmin.vue';
 import KnowledgeGraph from '@/components/KnowledgeGraph.vue';
 import ExtensionSlot from '@/components/ExtensionSlot.vue';
+import LayoutResizer from '@/components/LayoutResizer.vue';
 import API from '@/api/index.js';
 import { initFeatures, resetFeatures } from '@/store/features.js';
 
@@ -82,6 +100,59 @@ const loggedIn = ref(false);
 const initialError = ref('');
 const feedbackVisible = ref(false);
 const feedbackAdminVisible = ref(false);
+
+// ===== 三栏宽度拖拽 (Blender 风格) =====
+// 拖窄到 COLLAPSE_AT 以下 → 这一栏收起; 拖宽到相邻栏放不下 → 相邻栏被挤掉
+const MIN_SIDEBAR = 180;
+const MIN_LIST = 220;
+const MIN_EDITOR = 320;
+const COLLAPSE_AT = 120;
+
+// 只有桌面/平板才分三栏, 手机端是单栏全屏
+function resizingEnabled() {
+  return store.isDesktop || store.isTablet;
+}
+
+function resizeSidebar(delta) {
+  if (!resizingEnabled()) return;
+  const total = window.innerWidth;
+  const w = (store.sidebarCollapsed ? MIN_SIDEBAR : store.sidebarWidth) + delta;
+
+  // 向左拖到很窄 → 分类栏自己收起
+  if (w < COLLAPSE_AT) {
+    store.sidebarCollapsed = true;
+    return;
+  }
+  store.sidebarCollapsed = false;
+
+  // 向右拖: 优先保住编辑区, 剩余空间放不下笔记列表就把列表挤掉
+  const maxKeepList = total - MIN_EDITOR - MIN_LIST;
+  if (w > maxKeepList) {
+    store.noteListCollapsed = true;
+    store.setSidebarWidth(Math.max(MIN_SIDEBAR, Math.min(w, total - MIN_EDITOR)));
+  } else {
+    store.noteListCollapsed = false;
+    store.setSidebarWidth(Math.max(MIN_SIDEBAR, w));
+  }
+}
+
+function resizeList(delta) {
+  if (!resizingEnabled()) return;
+  const total = window.innerWidth;
+  const w = (store.noteListCollapsed ? MIN_LIST : store.listWidth) + delta;
+
+  // 向左拖到很窄 → 笔记列表收起
+  if (w < COLLAPSE_AT) {
+    store.noteListCollapsed = true;
+    return;
+  }
+  store.noteListCollapsed = false;
+
+  // 向右拖: 编辑区至少要留 MIN_EDITOR
+  const sidebarW = store.sidebarCollapsed ? 0 : store.sidebarWidth;
+  const max = Math.max(MIN_LIST, total - sidebarW - MIN_EDITOR);
+  store.setListWidth(Math.min(w, max));
+}
 
 
 onMounted(async () => {
