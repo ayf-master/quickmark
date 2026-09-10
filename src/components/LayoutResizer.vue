@@ -14,7 +14,8 @@
 import { ref } from 'vue';
 
 // 只负责"把指针位移换算成宽度增量"交给父组件, 布局规则由父组件决定
-const emit = defineEmits(['resize', 'reset']);
+// start/end 让父组件有机会记录拖拽前的基准宽度
+const emit = defineEmits(['start', 'resize', 'end']);
 
 defineProps({
   title: { type: String, default: '拖拽调整宽度 (双击恢复默认)' }
@@ -27,6 +28,7 @@ function onPointerDown(e) {
   e.preventDefault();
   active.value = true;
   let lastX = e.clientX;
+  emit('start');
 
   const onMove = (ev) => {
     // 传增量而不是绝对坐标: 父组件用自己的宽度基准累加, 不用关心起始值
@@ -38,6 +40,7 @@ function onPointerDown(e) {
     active.value = false;
     document.removeEventListener('pointermove', onMove);
     document.removeEventListener('pointerup', onUp);
+    emit('end');
   };
 
   document.addEventListener('pointermove', onMove);
