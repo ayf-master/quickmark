@@ -39,19 +39,43 @@
           <rect width="100%" height="100%" fill="url(#grid-large)"/>
         </svg>
 
-        <!-- 笔记卡片 -->
+        <!-- 分类组块: 按分类把笔记分成一块一块, 块内网格排布 -->
         <div
-          v-for="card in cards"
-          :key="card.id"
-          class="note-card"
-          :class="{ dragging: card.id === draggingId }"
-          :style="cardStyle(card)"
-          @pointerdown.stop="onCardDragStart($event, card)"
-          @dblclick="openNote(card)">
-          <div class="card-title">{{ card.title || '无标题' }}</div>
-          <div class="card-preview" v-if="card.content">{{ cardPreview(card.content) }}</div>
-          <div class="card-categories" v-if="card.category_names?.length">
-            <span v-for="cn in card.category_names.slice(0, 3)" :key="cn" class="card-cat-tag">{{ cn }}</span>
+          v-for="g in groups"
+          :key="g.key"
+          class="canvas-group"
+          :class="{ 'group-dragging': draggingGroup === g.key }"
+          :style="groupStyle(g)">
+          <!-- 组块标题栏 (整块的拖拽把手) -->
+          <div class="group-head" @pointerdown.stop="onGroupDragStart($event, g)">
+            <span class="group-dot" :style="{ background: g.color }"></span>
+            <span class="group-name" :title="g.name">{{ g.name }}</span>
+            <span class="group-count">{{ g.notes.length }}</span>
+            <button class="group-add" @pointerdown.stop @click.stop="startAddNote(g)"
+              :title="'在「' + g.name + '」下新建笔记'">＋</button>
+          </div>
+          <!-- 块内笔记网格 -->
+          <div class="group-body" :style="{ gridTemplateColumns: `repeat(${GROUP_COLS}, ${CARD_W}px)` }">
+            <div
+              v-for="card in g.notes"
+              :key="card.id"
+              class="note-card"
+              @pointerdown.stop
+              @click="openNote(card)">
+              <button class="card-del" @pointerdown.stop @click.stop="removeNote(card)" title="删除笔记">✕</button>
+              <div class="card-title">{{ card.title || '无标题' }}</div>
+              <div class="card-preview" v-if="card.content">{{ cardPreview(card.content) }}</div>
+            </div>
+            <!-- 新建笔记的就地输入 -->
+            <div v-if="addingGroup === g.key" class="note-card note-card-new">
+              <input ref="newNoteInput"
+                v-model="newNoteTitle"
+                @keydown.enter.prevent="confirmAddNote(g)"
+                @keydown.esc="cancelAddNote"
+                @blur="cancelAddNote"
+                placeholder="输入标题后回车"
+                class="new-note-input" />
+            </div>
           </div>
         </div>
       </div>
@@ -66,7 +90,7 @@
 </template>
 
 <script setup>
-import { ref, reactive, computed, onMounted, onUnmounted } from 'vue';
+import { ref, reactive, computed, onMounted, onUnmounted, watch, nextTick } from 'vue';
 import { store } from '@/store';
 import API from '@/api/index.js';
 
@@ -80,12 +104,10 @@ const panY = ref(0);
 const isPanning = ref(false);
 const panStart = reactive({ x: 0, y: 0, panX: 0, panY: 0 });
 
-// ===== 卡片状态 =====
+// ===== 笔记状态 =====
 const cards = ref([]);
-const draggingId = ref(null);
+// 拖拽偏移量 (组块与画布平移共用)
 const dragOffset = reactive({ x: 0, y: 0 });
-const dragStartClient = reactive({ x: 0, y: 0 });
-const positions = reactive({}); // { noteId: {x, y} }
 
 // ===== 触摸状态 (双指缩放) =====
 const isPinching = ref(false);
@@ -99,13 +121,6 @@ const worldStyle = computed(() => ({
   transformOrigin: '0 0'
 }));
 
-function cardStyle(card) {
-  const pos = positions[card.id] || { x: 0, y: 0 };
-  return {
-    transform: `translate(${pos.x}px, ${pos.y}px)`,
-    cursor: draggingId.value === card.id ? 'grabbing' : 'grab'
-  };
-}
 
 // ===== 视图控制 =====
 
@@ -170,41 +185,147 @@ function onTouchEnd() {
   pinchDist = 0;
 }
 
-// ===== 卡片拖拽 (pointer 事件, 鼠标与触摸通用) =====
+// ===== 组块化布局 =====
+// 笔记按所属分类聚成一块, 块内网格排布; 拖动块标题栏可整块移动
+const CARD_W = 200;
+const CARD_H = 92;
+const CARD_GAP = 10;
+const GROUP_COLS = 2;      // 每块每行放几张卡
+const GROUP_GAP = 36;      // 块与块的间距
+const LAYOUT_W = 1500;     // 自动布局的折行宽度
 
-function onCardDragStart(e, card) {
-  draggingId.value = card.id;
-  const pos = positions[card.id] || { x: 0, y: 0 };
-  dragOffset.x = e.clientX - pos.x;
-  dragOffset.y = e.clientY - pos.y;
-  dragStartClient.x = e.clientX;
-  dragStartClient.y = e.clientY;
-  document.addEventListener('pointermove', onDragMove);
-  document.addEventListener('pointerup', onDragEnd);
-}
+const groupPositions = reactive({}); // { groupKey: {x, y} }
+const draggingGroup = ref(null);
+const addingGroup = ref(null);
+const newNoteTitle = ref('');
+const newNoteInput = ref(null);
 
-function onDragMove(e) {
-  if (!draggingId.value) return;
-  positions[draggingId.value] = {
-    x: e.clientX - dragOffset.x,
-    y: e.clientY - dragOffset.y
+// 按分类分组: 多条分类的笔记归到第一个分类下; 无分类的进「未归类」
+const groups = computed(() => {
+  const map = new Map();
+  for (const n of cards.value) {
+    const cid = n.category_ids && n.category_ids.length ? n.category_ids[0] : 0;
+    if (!map.has(cid)) {
+      const cat = store.categories.find(c => c.id === cid);
+      map.set(cid, {
+        key: cid,
+        name: cid ? (cat?.name || '未知分类') : '未归类',
+        color: cid ? (cat?.color || '#8b5cf6') : '#94a3b8',
+        notes: []
+      });
+    }
+    map.get(cid).notes.push(n);
+  }
+  // 块内按列表顺序 (position) 排, 与侧栏一致
+  const order = new Map(cards.value.map((n, i) => [n.id, i]));
+  for (const g of map.values()) g.notes.sort((a, b) => (order.get(a.id) ?? 0) - (order.get(b.id) ?? 0));
+  return [...map.values()];
+});
+
+function groupSize(g) {
+  const rows = Math.max(1, Math.ceil(g.notes.length / GROUP_COLS));
+  return {
+    w: 24 + GROUP_COLS * CARD_W + (GROUP_COLS - 1) * CARD_GAP,
+    h: 24 + 34 + 8 + rows * CARD_H + (rows - 1) * CARD_GAP
   };
-  // 触发响应式更新
-  positions[draggingId.value] = { ...positions[draggingId.value] };
 }
 
-function onDragEnd(e) {
-  const moved = Math.hypot(
-    (e?.clientX ?? dragStartClient.x) - dragStartClient.x,
-    (e?.clientY ?? dragStartClient.y) - dragStartClient.y
-  );
-  const card = cards.value.find(c => c.id === draggingId.value);
-  draggingId.value = null;
-  document.removeEventListener('pointermove', onDragMove);
-  document.removeEventListener('pointerup', onDragEnd);
-  // 触摸端没有可靠的 dblclick: 位移极小 (<10px) 视为点击, 打开笔记
-  if (card && e?.pointerType === 'touch' && moved < 10) {
-    openNote(card);
+function groupStyle(g) {
+  const pos = groupPositions[g.key] || { x: 0, y: 0 };
+  return {
+    transform: `translate(${pos.x}px, ${pos.y}px)`,
+    width: groupSize(g).w + 'px'
+  };
+}
+
+// 首次渲染时给没位置的块自动排一遍 (左→右, 放不下就换行)
+function layoutGroups() {
+  let x = 40, y = 40, rowH = 0;
+  for (const g of groups.value) {
+    if (groupPositions[g.key] != null) continue;
+    const { w, h } = groupSize(g);
+    if (x > 40 && x + w > LAYOUT_W) {
+      x = 40;
+      y += rowH + GROUP_GAP;
+      rowH = 0;
+    }
+    groupPositions[g.key] = { x, y };
+    x += w + GROUP_GAP;
+    rowH = Math.max(rowH, h);
+  }
+}
+watch(groups, () => layoutGroups(), { immediate: true });
+
+// ===== 组块拖拽 =====
+
+function onGroupDragStart(e, g) {
+  if (e.button != null && e.button !== 0) return;
+  draggingGroup.value = g.key;
+  const pos = groupPositions[g.key] || { x: 0, y: 0 };
+  dragOffset.x = e.clientX / scale.value - pos.x;
+  dragOffset.y = e.clientY / scale.value - pos.y;
+  document.addEventListener('pointermove', onGroupDragMove);
+  document.addEventListener('pointerup', onGroupDragEnd);
+}
+
+function onGroupDragMove(e) {
+  if (draggingGroup.value == null) return;
+  groupPositions[draggingGroup.value] = {
+    x: e.clientX / scale.value - dragOffset.x,
+    y: e.clientY / scale.value - dragOffset.y
+  };
+}
+
+function onGroupDragEnd() {
+  draggingGroup.value = null;
+  document.removeEventListener('pointermove', onGroupDragMove);
+  document.removeEventListener('pointerup', onGroupDragEnd);
+}
+
+// ===== 在组块内新建 / 删除笔记 =====
+
+function startAddNote(g) {
+  addingGroup.value = g.key;
+  newNoteTitle.value = '';
+  nextTick(() => newNoteInput.value?.focus());
+}
+
+function cancelAddNote() {
+  addingGroup.value = null;
+  newNoteTitle.value = '';
+}
+
+async function confirmAddNote(g) {
+  const title = newNoteTitle.value.trim() || '新笔记';
+  try {
+    const note = await API.createNote({
+      title,
+      content: '',
+      category_ids: g.key ? [g.key] : []
+    });
+    await reload();
+    addingGroup.value = null;
+    newNoteTitle.value = '';
+    store.showToast('已创建: ' + title);
+    // 建完直接跳过去编辑, 画布是浮层会挡住编辑器
+    store.openNote(note);
+    emit('close');
+  } catch (e) {
+    store.showToast('创建失败', 'error');
+  }
+}
+
+async function removeNote(card) {
+  if (!window.confirm(`确定删除笔记「${card.title || '无标题'}」？此操作不可撤销。`)) return;
+  try {
+    await API.deleteNote(card.id);
+    cards.value = cards.value.filter(c => c.id !== card.id);
+    // 删的正好是当前打开的笔记 → 关掉编辑器, 避免残留编辑态
+    if (store.editingNote?.id === card.id) store.closeEditor();
+    store.loadNotes();
+    store.showToast('已删除');
+  } catch (e) {
+    store.showToast('删除失败', 'error');
   }
 }
 
@@ -224,29 +345,30 @@ function cardPreview(content) {
 
 function openNote(card) {
   store.openNote(card);
+  // 画布是全屏浮层, 不关掉会盖住编辑器
+  emit('close');
 }
 
 // ===== 加载笔记 =====
 
 onMounted(async () => {
   document.addEventListener('keydown', onKeydown);
+  // 组块标题要显示分类名和颜色, 先确保分类已加载
+  if (!store.categories || store.categories.length === 0) {
+    store.loadCategories().catch(() => {});
+  }
+  await reload();
+});
+
+async function reload() {
   try {
     const notes = await API.getNotes({});
     cards.value = notes || [];
-    // 给每个笔记分配一个随机的初始位置 (如果还没保存过)
-    const cols = Math.ceil(Math.sqrt(notes.length || 1));
-    notes.forEach((n, i) => {
-      if (positions[n.id] == null) {
-        positions[n.id] = {
-          x: 60 + (i % cols) * 240,
-          y: 60 + Math.floor(i / cols) * 160
-        };
-      }
-    });
+    layoutGroups();
   } catch (e) {
     console.warn('加载画布笔记失败:', e);
   }
-});
+}
 
 onUnmounted(() => {
   document.removeEventListener('keydown', onKeydown);
@@ -348,30 +470,138 @@ onUnmounted(() => {
   pointer-events: none;
 }
 
-/* ===== 笔记卡片 ===== */
-.note-card {
+/* ===== 分类组块 ===== */
+.canvas-group {
   position: absolute;
   top: 0;
   left: 0;
+  padding: 12px;
+  background: var(--bg-panel);
+  border: 1px solid var(--border-default);
+  border-radius: 12px;
+  box-shadow: var(--shadow-md);
+  user-select: none;
+}
+.canvas-group.group-dragging {
+  box-shadow: var(--shadow-xl);
+  border-color: var(--color-primary);
+  z-index: 5;
+}
+.group-head {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  height: 34px;
+  margin-bottom: 8px;
+  padding: 0 2px;
+  cursor: grab;
+  border-bottom: 1px dashed var(--border-subtle, var(--border-default));
+}
+.canvas-group.group-dragging .group-head { cursor: grabbing; }
+.group-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  flex-shrink: 0;
+}
+.group-name {
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--text-primary);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.group-count {
+  font-size: 11px;
+  color: var(--text-tertiary);
+  background: var(--bg-elevated);
+  border-radius: 9px;
+  padding: 0 6px;
+  flex-shrink: 0;
+}
+.group-add {
+  margin-left: auto;
+  width: 22px;
+  height: 22px;
+  border-radius: 6px;
+  border: 1px solid var(--border-default);
+  background: var(--bg-elevated);
+  color: var(--text-secondary);
+  font-size: 13px;
+  line-height: 1;
+  cursor: pointer;
+  flex-shrink: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+.group-add:hover {
+  background: var(--color-primary-subtle);
+  border-color: var(--color-primary);
+  color: var(--color-primary);
+}
+.group-body {
+  display: grid;
+  gap: 10px;
+}
+
+/* ===== 笔记卡片 ===== */
+.note-card {
+  position: relative;   /* 块内由 grid 排布, 不再绝对定位 */
   width: 200px;
+  height: 92px;
   padding: 12px;
   background: var(--bg-elevated);
   border: 1px solid var(--border-default);
   border-radius: 10px;
-  box-shadow: var(--shadow-md);
-  cursor: grab;
-  transition: box-shadow .2s;
+  box-shadow: var(--shadow-sm, var(--shadow-md));
+  cursor: pointer;
+  transition: box-shadow .2s, border-color .2s;
   user-select: none;
-  touch-action: none;
+  overflow: hidden;
 }
 .note-card:hover {
   box-shadow: var(--shadow-lg);
   border-color: var(--color-primary);
 }
-.note-card.dragging {
-  box-shadow: var(--shadow-xl);
-  z-index: 10;
-  opacity: 0.9;
+.note-card-new {
+  display: flex;
+  align-items: center;
+  padding: 8px 10px;
+  cursor: default;
+}
+.new-note-input {
+  width: 100%;
+  background: transparent;
+  border: none;
+  outline: none;
+  font-size: 13px;
+  color: var(--text-primary);
+}
+.card-del {
+  position: absolute;
+  top: 4px;
+  right: 4px;
+  width: 18px;
+  height: 18px;
+  border-radius: 4px;
+  border: none;
+  background: transparent;
+  color: var(--text-tertiary);
+  font-size: 11px;
+  line-height: 1;
+  cursor: pointer;
+  opacity: 0;
+  transition: opacity .15s;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+.note-card:hover .card-del { opacity: 1; }
+.card-del:hover {
+  background: var(--color-danger, #ef4444);
+  color: #fff;
 }
 .card-title {
   font-size: 13px;
