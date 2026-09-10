@@ -176,7 +176,8 @@ async function listNotes(userId, { search, category_id, pinned }, prisma) {
   const rows = await prisma.note.findMany({
     where,
     include: { categories: { include: { category: true } } },
-    orderBy: [{ isPinned: 'desc' }, { position: 'asc' }, { updatedAt: 'desc' }]
+    // 不再按 is_pinned 置顶: 收藏只是个标记, 笔记应停在它本来的位置
+    orderBy: [{ position: 'asc' }, { updatedAt: 'desc' }]
   });
   return rows.map(formatNote);
 }

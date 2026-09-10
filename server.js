@@ -287,7 +287,8 @@ app.get('/api/notes', async (req, res) => {
 
     if (pinned === 'true') conditions.push('n.is_pinned = 1');
     if (conditions.length > 0) sql += ' WHERE ' + conditions.join(' AND ');
-    sql += ' GROUP BY n.id ORDER BY n.is_pinned DESC, n.updated_at DESC';
+    // 不再按 is_pinned 置顶, 收藏只做标记, 保持笔记原有位置
+    sql += ' GROUP BY n.id ORDER BY n.position ASC, n.updated_at DESC';
 
     const [rows] = await pool.query(sql, params);
     const notes = rows.map(row => ({
