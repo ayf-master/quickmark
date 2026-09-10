@@ -61,6 +61,9 @@ export const store = reactive({
   editorImageUploading: false, // 上传中标记 (防重复点击)
   backlinkPanelVisible: true,  // 反向链接面板展开
   knowledgeGraphVisible: false, // 知识图谱浮层
+  // 从某条笔记内打开图谱时记录该笔记 id: 图谱里它和它的链接邻居会用不同颜色突出;
+  // 从侧栏全局打开时为 null, 全部节点走常规着色
+  graphFocusNoteId: null,
 
   // 笔记导航历史 (用于"回到上一条笔记")
   // 栈结构: 进入新笔记时把当前 editingNote.id 推入; 回退时弹栈打开

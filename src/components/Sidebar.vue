@@ -108,7 +108,7 @@
 
     <!-- 底部: 知识图谱入口 -->
     <div class="flex-shrink-0 px-3 pb-3" style="border-top: 1px solid var(--border-default);">
-      <button @click="store.knowledgeGraphVisible = true"
+      <button @click="store.graphFocusNoteId = null; store.knowledgeGraphVisible = true"
         class="w-full flex items-center gap-2.5 px-3 py-2.5 mt-2 rounded-lg text-sm transition-all"
         style="color: var(--text-secondary);"
         @mouseenter="$el.style.background='var(--bg-hover)'"

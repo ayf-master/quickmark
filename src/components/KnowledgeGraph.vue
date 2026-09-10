@@ -29,6 +29,12 @@
           <svg ref="svgRef" class="graph-svg">
             <g ref="gRef"></g>
           </svg>
+          <!-- 焦点模式图例: 从笔记内打开时显示颜色含义 -->
+          <div v-if="focusId" class="graph-legend">
+            <span class="legend-item"><i class="legend-dot" :style="{ background: FOCUS_COLOR }"></i>当前笔记</span>
+            <span class="legend-item"><i class="legend-dot" :style="{ background: LINKED_COLOR }"></i>链接的笔记</span>
+            <span class="legend-item"><i class="legend-dot" style="background: var(--text-tertiary)"></i>其他</span>
+          </div>
           <div v-if="tooltipVisible" class="graph-tooltip"
             :style="{ left: tooltipX + 'px', top: tooltipY + 'px' }">
             <div class="tooltip-title">{{ tooltipTitle }}</div>
@@ -84,6 +90,63 @@ function masteryColor(m) {
   return `hsl(${hue}, 62%, 48%)`;
 }
 
+// ===== 焦点高亮: 从笔记内打开图谱时, 当前笔记 + 直接链接的笔记用不同颜色突出 =====
+const FOCUS_COLOR = '#f59e0b';   // 当前笔记: 橙金
+const LINKED_COLOR = '#06b6d4';  // 链接的笔记: 青色
+
+const focusId = computed(() => {
+  const id = store.graphFocusNoteId;
+  // graphNotes 里存在才生效 (笔记可能已被删除)
+  return (id != null && store.graphNotes.some(n => n.id === id)) ? id : null;
+});
+
+// 与焦点直接相连的节点集合 (打开图谱/切换焦点时计算一次)
+const linkedIds = computed(() => {
+  const set = new Set();
+  const fid = focusId.value;
+  if (fid == null) return set;
+  for (const e of store.graphData.edges) {
+    if (e.source === fid) set.add(e.target);
+    if (e.target === fid) set.add(e.source);
+  }
+  return set;
+});
+
+function nodeColor(d) {
+  const fid = focusId.value;
+  if (fid != null) {
+    if (d.id === fid) return FOCUS_COLOR;
+    if (linkedIds.value.has(d.id)) return LINKED_COLOR;
+    return 'var(--text-tertiary)'; // 无关节点: 灰
+  }
+  return masteryColor(d.mastery);
+}
+
+function nodeOpacity(d) {
+  const fid = focusId.value;
+  if (fid == null) return 0.82;
+  if (d.id === fid || linkedIds.value.has(d.id)) return 0.92;
+  return 0.3; // 无关节点淡化
+}
+
+function edgeColor(d) {
+  const fid = focusId.value;
+  if (fid == null) return 'var(--color-primary)';
+  return (d.source === fid || d.target === fid) ? FOCUS_COLOR : 'var(--text-tertiary)';
+}
+
+function edgeOpacity(d) {
+  const fid = focusId.value;
+  if (fid == null) return 0.4;
+  return (d.source === fid || d.target === fid) ? 0.75 : 0.1;
+}
+
+function edgeWidth(d) {
+  const fid = focusId.value;
+  if (fid == null) return 2;
+  return (d.source === fid || d.target === fid) ? 2.5 : 1.5;
+}
+
 // 过滤后的图数据
 const filteredData = computed(() => {
   const raw = store.graphData;
@@ -121,14 +184,21 @@ function initSimulation() {
   if (rawNodes.length === 0) return;
 
   // 初始圆形布局, 避免节点一开始全叠在中心
+  // 有焦点笔记时: 焦点固定在画布中心, 其余节点环绕它 — 突出"以这篇笔记为中心"
+  const focus = focusId.value;
   const centerX = width / 2;
   const centerY = height / 2;
   const radius = Math.min(width, height) * 0.25;
-  rawNodes.forEach((d, i) => {
-    const angle = (2 * Math.PI * i) / rawNodes.length - Math.PI / 2;
+  const others = focus != null ? rawNodes.filter(d => d.id !== focus) : rawNodes;
+  others.forEach((d, i) => {
+    const angle = (2 * Math.PI * i) / (others.length || 1) - Math.PI / 2;
     d.x = centerX + radius * Math.cos(angle);
     d.y = centerY + radius * Math.sin(angle);
   });
+  if (focus != null) {
+    const f = rawNodes.find(d => d.id === focus);
+    if (f) { f.x = centerX; f.y = centerY; f.fx = centerX; f.fy = centerY; }
+  }
 
   const svg = select(svgRef.value);
   svg.selectAll('*').remove();
@@ -164,15 +234,15 @@ function initSimulation() {
     }
   }
 
-  // 边 (曲线路径) — 双向时错开弯曲
+  // 边 (曲线路径) — 双向时错开弯曲; 有焦点时与焦点相关的边高亮, 无关的淡化
   const link = g.append('g')
     .selectAll('path')
     .data(edgeMeta)
     .join('path')
     .attr('fill', 'none')
-    .attr('stroke', 'var(--color-primary)')
-    .attr('stroke-width', 2)
-    .attr('stroke-opacity', 0.4)
+    .attr('stroke', d => edgeColor(d))
+    .attr('stroke-width', d => edgeWidth(d))
+    .attr('stroke-opacity', d => edgeOpacity(d))
     .attr('marker-end', 'url(#graph-arrow)');
 
   // 边标签 (用户自定义标注)
@@ -214,21 +284,30 @@ function initSimulation() {
       })
     );
 
-  // 圆 — 按掌握度着色 (开启间隔重复时)
+  // 圆 — 按掌握度着色 (开启间隔重复时); 有焦点时按"焦点/链接/无关"三档着色
   node.append('circle')
-    .attr('r', d => Math.max(6, Math.min(22, 4 + (d.totalCount || 0) * 3)))
-    .attr('fill', d => masteryColor(d.mastery))
-    .attr('fill-opacity', 0.82)
-    .attr('stroke', d => masteryColor(d.mastery))
-    .attr('stroke-opacity', 0.95)
-    .attr('stroke-width', 1.5)
+    .attr('r', d => {
+      const base = Math.max(6, Math.min(22, 4 + (d.totalCount || 0) * 3));
+      return d.id === focusId.value ? base + 4 : base; // 焦点节点更大
+    })
+    .attr('fill', d => nodeColor(d))
+    .attr('fill-opacity', d => nodeOpacity(d))
+    .attr('stroke', d => d.id === focusId.value ? '#fff' : nodeColor(d))
+    .attr('stroke-opacity', d => d.id === focusId.value ? 0.9 : 0.95)
+    .attr('stroke-width', d => d.id === focusId.value ? 2.5 : 1.5)
     .style('cursor', 'pointer');
 
-  // 标签
+  // 标签 — 无关节点的标签同步淡化
   node.append('text')
     .text(d => d.title)
-    .attr('font-size', 11)
-    .attr('fill', 'var(--text-secondary)')
+    .attr('font-size', d => d.id === focusId.value ? 13 : 11)
+    .attr('font-weight', d => d.id === focusId.value ? 600 : 400)
+    .attr('fill', d => d.id === focusId.value ? FOCUS_COLOR : 'var(--text-secondary)')
+    .attr('fill-opacity', d => {
+      const fid = focusId.value;
+      if (fid == null) return 0.85;
+      return (d.id === fid || linkedIds.value.has(d.id)) ? 0.95 : 0.35;
+    })
     .attr('dx', d => Math.max(8, Math.min(24, 4 + (d.totalCount || 0) * 3)) + 5)
     .attr('dy', '0.35em')
     .style('pointer-events', 'none')
@@ -415,6 +494,32 @@ onBeforeUnmount(() => {
   width: 100%;
   height: 100%;
   display: block;
+}
+.graph-legend {
+  position: absolute;
+  bottom: 12px;
+  left: 12px;
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  padding: 6px 12px;
+  border-radius: 8px;
+  background: var(--bg-elevated);
+  border: 1px solid var(--border-default);
+  font-size: 11px;
+  color: var(--text-secondary);
+  pointer-events: none;
+}
+.legend-item {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+}
+.legend-dot {
+  width: 9px;
+  height: 9px;
+  border-radius: 50%;
+  display: inline-block;
 }
 .graph-tooltip {
   position: absolute;

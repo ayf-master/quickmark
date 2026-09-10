@@ -376,7 +376,7 @@
         </div>
         <div class="md-toolbar-divider"></div>
         <div class="md-toolbar-group">
-          <button @click="store.knowledgeGraphVisible = true" class="md-tool" title="知识图谱">
+          <button @click="openGraph()" class="md-tool" title="知识图谱 (突出显示本笔记及其链接)">
             <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
               <circle cx="8" cy="6" r="2" stroke-width="1.8"/>
               <circle cx="16" cy="12" r="2" stroke-width="1.8"/>
@@ -520,6 +520,16 @@
 
         <img :src="fullscreenImage" :key="fullscreenIndex" class="img-fullscreen-content" alt="全屏图片">
 
+        <!-- 标注入口: 打开画笔/文字标注器 -->
+        <button v-if="annotatorVisible === false"
+          class="img-fullscreen-nav img-fullscreen-annotate"
+          @click.stop="openAnnotator"
+          aria-label="标注图片"
+          title="在这张图片上做标注 (画笔涂改 / 打字)">
+          <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 19l7-7 3 3-7 7-3-3z"/><path d="M18 13l-1.5-7.5L2 2l3.5 14.5L13 18l5-5z"/></svg>
+          标注
+        </button>
+
         <!-- 下一张 -->
         <button v-if="fullscreenIndex < fullscreenImages.length - 1"
           class="img-fullscreen-nav img-fullscreen-nav-next"
@@ -532,6 +542,10 @@
 
         <!-- 计数器 -->
         <div class="img-fullscreen-counter">{{ fullscreenIndex + 1 }} / {{ fullscreenImages.length }}</div>
+
+        <!-- 图片标注器: 画笔涂改 / 打字, 保存后用带标注的新图替换原 URL -->
+        <ImageAnnotator :visible="annotatorVisible" :src="annotatorSrc"
+          @close="annotatorVisible = false" @save="onAnnotatorSave" />
       </div>
     </Teleport>
   </section>
@@ -544,6 +558,7 @@ import { store } from '@/store';
 import { features, refreshDueNotes, removeDueNote } from '@/store/features.js';
 import API from '@/api/index.js';
 import { uploadImageFile } from '@/utils/content';
+import ImageAnnotator from '@/components/ImageAnnotator.vue';
 import wikiPlugin from '@/utils/markdown-it-wiki';
 import { renderAnnotations } from '@/utils/markdown-it-annotations';
 import { findNoteByTitle } from '@/utils/wiki-link';
@@ -661,6 +676,27 @@ function removePlan() {
 
 // 图片全屏浏览（支持多张导航）
 const fullscreenImages = ref([]);
+
+// ===== 图片标注 =====
+const annotatorVisible = ref(false);
+const annotatorSrc = ref('');
+
+function openAnnotator() {
+  annotatorSrc.value = fullscreenImage.value;
+  annotatorVisible.value = true;
+}
+
+// 标注保存: 服务器生成了带标注的新图 → 把笔记内容里的旧 URL 全部替换
+async function onAnnotatorSave(newUrl) {
+  const oldUrl = annotatorSrc.value;
+  annotatorVisible.value = false;
+  if (oldUrl && store.editContent && store.editContent.includes(oldUrl)) {
+    store.editContent = store.editContent.split(oldUrl).join(newUrl);
+    store.scheduleAutoSave();
+  }
+  closeFullscreen();
+  store.showToast('标注已保存, 图片已更新');
+}
 const fullscreenIndex = ref(-1);
 const fullscreenOverlay = ref(null);
 const fullscreenImage = computed(() =>
@@ -801,6 +837,11 @@ function addLink() {
 function removeLink(index) {
   store.editLinks.splice(index, 1);
   store.scheduleAutoSave();
+}
+// 从当前笔记打开知识图谱: 记下焦点笔记 id, 图谱里它和它的链接邻居会高亮
+function openGraph() {
+  store.graphFocusNoteId = store.editingNote?.id ?? null;
+  store.knowledgeGraphVisible = true;
 }
 async function openLinkNote(title) {
   let note = findNoteByTitle(store.notes, title);
@@ -2388,6 +2429,33 @@ button[aria-label="删除笔记"]:hover {
   backdrop-filter: blur(4px);
   -webkit-backdrop-filter: blur(4px);
   user-select: none;
+}
+
+/* ===== 图片标注入口按钮 (全屏查看器右侧中部) ===== */
+.img-fullscreen-annotate {
+  position: absolute;
+  right: 20px;
+  top: 50%;
+  transform: translateY(-50%);
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  width: auto;
+  height: 38px;
+  padding: 0 14px;
+  border-radius: 20px;
+  background: rgba(0,0,0,.55);
+  border: 1px solid rgba(255,255,255,.35);
+  color: #fff;
+  font-size: 13px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all .15s;
+  backdrop-filter: blur(4px);
+}
+.img-fullscreen-annotate:hover {
+  background: rgba(0,0,0,.75);
+  border-color: var(--color-primary);
 }
 
         /* ===== 标记已复习按钮 ===== */
