@@ -291,7 +291,8 @@ watch(() => props.visible, (v) => {
 .annotator-overlay {
   position: fixed;
   inset: 0;
-  z-index: 300; /* 盖在全屏图片查看器之上 */
+  /* 必须高于图片预览浮层(z-index 9999), 否则标注器打开后被预览盖住 = 点了没反应 */
+  z-index: 10000;
   background: rgba(0, 0, 0, 0.88);
   display: flex;
   flex-direction: column;

@@ -2441,10 +2441,10 @@ button[aria-label="删除笔记"]:hover {
   user-select: none;
 }
 
-/* ===== 图片标注入口按钮 (全屏查看器右侧中部) ===== */
+/* ===== 图片标注入口按钮 (与"下一张"按钮同排, right 需避开 48px 宽的 next 按钮) ===== */
 .img-fullscreen-annotate {
   position: absolute;
-  right: 20px;
+  right: 84px;
   top: 50%;
   transform: translateY(-50%);
   display: inline-flex;
