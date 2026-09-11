@@ -496,9 +496,9 @@
         @click.self="closeFullscreen"
         @touchstart.passive="onFullscreenTouchStart"
         @touchend.passive="onFullscreenTouchEnd"
-        @keydown.escape="closeFullscreen"
-        @keydown.left="goFullscreenPrev"
-        @keydown.right="goFullscreenNext"
+        @keydown.escape.stop="closeFullscreen"
+        @keydown.left.stop="goFullscreenPrev"
+        @keydown.right.stop="goFullscreenNext"
         tabindex="0"
         ref="fullscreenOverlay">
         <button class="img-fullscreen-close" @click="closeFullscreen" aria-label="关闭">

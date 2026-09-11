@@ -1,7 +1,9 @@
 <template>
   <transition name="modal">
     <div v-if="store.knowledgeGraphVisible"
-      class="graph-overlay" @click.self="close">
+      class="graph-overlay" @click.self="close"
+      tabindex="0" ref="overlayRef"
+      @keydown.escape.stop="close">
       <div class="graph-container">
         <div class="graph-header">
           <div class="graph-header-left">
@@ -68,6 +70,7 @@ import { zoom as d3Zoom } from 'd3-zoom';
 import { drag as d3Drag } from 'd3-drag';
 
 const containerRef = ref(null);
+const overlayRef = ref(null); // 浮层根节点: 接焦点以接收 Esc
 const svgRef = ref(null);
 const gRef = ref(null);
 const showIsolated = ref(false);
@@ -409,7 +412,11 @@ function close() {
 watch(() => store.knowledgeGraphVisible, async (v) => {
   if (v) {
     await store.loadGraphNotes();
-    nextTick(() => initSimulation());
+    nextTick(() => {
+      initSimulation();
+      // 焦点给浮层, Esc(带 .stop)才能在这里被接住: 关图谱且不冒泡误关编辑器
+      overlayRef.value?.focus();
+    });
   }
 });
 
