@@ -78,7 +78,12 @@ function globalKeydown(e) {
       return;
     }
     // Esc 关闭编辑器
-    if (e.key === 'Escape' && !store.preferencePanelVisible && !store.shortcutPanelVisible && !store.userGuideVisible && !store.newNoteDialogOpen && !store.showNewCategoryDialog && !store.showEditCategoryDialog && !store.mobileDrawerOpen) {
+    // 注意: 全屏浮层 (图片预览/知识图谱) 打开时 Esc 归浮层, 不能关编辑器 —
+    // 否则预览里按 Esc, 事件冒泡到 document 会把整个编辑器一起退掉
+    if (e.key === 'Escape' && !store.imagePreviewVisible && !store.knowledgeGraphVisible
+      && !store.preferencePanelVisible && !store.shortcutPanelVisible && !store.userGuideVisible
+      && !store.newNoteDialogOpen && !store.showNewCategoryDialog && !store.showEditCategoryDialog
+      && !store.mobileDrawerOpen) {
       store.closeEditor();
       return;
     }

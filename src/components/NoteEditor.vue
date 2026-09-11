@@ -715,6 +715,7 @@ function closeFullscreen() {
   if (annotatorVisible.value) return;
   fullscreenImages.value = [];
   fullscreenIndex.value = -1;
+  store.imagePreviewVisible = false;
 }
 // 关闭标注器并把焦点还给预览浮层, 否则预览上的 Esc/←/→ 快捷键会失灵 (焦点丢了)
 function closeAnnotator() {
@@ -1895,6 +1896,8 @@ function handlePreviewClick(e) {
       const idx = allImages.indexOf(src);
       fullscreenImages.value = allImages;
       fullscreenIndex.value = idx >= 0 ? idx : 0;
+      store.imagePreviewVisible = true; // 全局 Esc 要知道预览开着, 不然会顺带关掉编辑器
+      nextTick(() => fullscreenOverlay.value?.focus());
     }
     return;
   }

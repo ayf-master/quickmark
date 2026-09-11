@@ -61,6 +61,9 @@ export const store = reactive({
   editorImageUploading: false, // 上传中标记 (防重复点击)
   backlinkPanelVisible: true,  // 反向链接面板展开
   knowledgeGraphVisible: false, // 知识图谱浮层
+  // 图片全屏预览是否打开: main.js 的全局 Esc 靠它判断该关谁,
+  // 不然预览里按 Esc 会同时命中全局 closeEditor, 把整个编辑器退掉
+  imagePreviewVisible: false,
   // 从某条笔记内打开图谱时记录该笔记 id: 图谱里它和它的链接邻居会用不同颜色突出;
   // 从侧栏全局打开时为 null, 全部节点走常规着色
   graphFocusNoteId: null,
