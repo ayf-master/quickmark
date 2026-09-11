@@ -545,7 +545,7 @@
 
         <!-- 图片标注器: 画笔涂改 / 打字, 保存后用带标注的新图替换原 URL -->
         <ImageAnnotator :visible="annotatorVisible" :src="annotatorSrc"
-          @close="annotatorVisible = false" @save="onAnnotatorSave" />
+          @close="closeAnnotator" @save="onAnnotatorSave" />
       </div>
     </Teleport>
   </section>
@@ -689,7 +689,7 @@ function openAnnotator() {
 // 标注保存: 服务器生成了带标注的新图 → 把笔记内容里的旧 URL 全部替换
 async function onAnnotatorSave(newUrl) {
   const oldUrl = annotatorSrc.value;
-  annotatorVisible.value = false;
+  closeAnnotator(); // 关标注器 + 焦点还给预览浮层
   if (oldUrl && store.editContent && store.editContent.includes(oldUrl)) {
     store.editContent = store.editContent.split(oldUrl).join(newUrl);
     store.scheduleAutoSave();
@@ -711,8 +711,15 @@ function goFullscreenNext() {
   if (fullscreenIndex.value < fullscreenImages.value.length - 1) fullscreenIndex.value++;
 }
 function closeFullscreen() {
+  // 标注器打开时 Esc 归标注器: 只退标注回到预览, 不穿透关掉整个预览
+  if (annotatorVisible.value) return;
   fullscreenImages.value = [];
   fullscreenIndex.value = -1;
+}
+// 关闭标注器并把焦点还给预览浮层, 否则预览上的 Esc/←/→ 快捷键会失灵 (焦点丢了)
+function closeAnnotator() {
+  annotatorVisible.value = false;
+  nextTick(() => fullscreenOverlay.value?.focus());
 }
 function goFullscreenByIndex(idx) {
   if (idx >= 0 && idx < fullscreenImages.value.length) fullscreenIndex.value = idx;
