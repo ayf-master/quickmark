@@ -55,8 +55,9 @@
       <!-- 扩展功能 (功能开关面板) -->
       <FeaturePanel />
 
-      <!-- 拓展功能入口: 仅已激活才显示对应的快捷按钮 -->
-      <button v-if="features.spacedRepetition"
+      <!-- 拓展功能入口: 仅已激活才显示对应的快捷按钮
+           手机端不铺开显示 (顶栏放不下且会和搜索框挤), 统一点上面四宫格图标进入面板 -->
+      <button v-if="features.spacedRepetition && !store.isMobile"
         @click="goToDueNotes"
         class="btn btn-icon btn-ghost relative"
         aria-label="间隔重复"
@@ -65,7 +66,7 @@
         <span v-if="features.dueCount > 0" class="header-badge">{{ features.dueCount > 99 ? '99+' : features.dueCount }}</span>
       </button>
 
-      <button v-if="features.canvas"
+      <button v-if="features.canvas && !store.isMobile"
         @click="openCanvas"
         class="btn btn-icon btn-ghost"
         aria-label="2D 画布"
@@ -73,7 +74,7 @@
         <span style="font-size:16px;line-height:1;">🖼</span>
       </button>
 
-      <button v-if="features.ganttChart"
+      <button v-if="features.ganttChart && !store.isMobile"
         @click="openGantt"
         class="btn btn-icon btn-ghost"
         aria-label="计划甘特表"

@@ -127,11 +127,21 @@
 
     <!-- 拓展功能插槽 (预留) -->
     <ExtensionSlot name="sidebar-bottom" />
+
+    <!-- 手机抽屉宽度拖拽把手: 固定在抽屉右缘, 拖动调宽 (双击恢复默认) -->
+    <div v-if="store.isMobile && store.mobileDrawerOpen"
+      class="drawer-resizer" :class="{ active: resizingDrawer }"
+      :style="{ left: store.mobileDrawerWidth + 'px' }"
+      title="拖动调整分类栏宽度 (双击恢复默认)"
+      @pointerdown="onDrawerResizeStart"
+      @dblclick="store.setMobileDrawerWidth(264)">
+      <span class="drawer-resizer-grip"></span>
+    </div>
   </aside>
 </template>
 
 <script setup>
-import { computed, watch, nextTick } from 'vue';
+import { computed, watch, nextTick, ref } from 'vue';
 import { store } from '@/store';
 import CategoryTreeNode from '@/components/CategoryTreeNode.vue';
 import ExtensionSlot from '@/components/ExtensionSlot.vue';
@@ -161,19 +171,39 @@ const sidebarStyle = computed(() => {
       transition: 'width 0.2s ease'
     };
   }
+  // 手机抽屉: 宽度可拖拽调节 (抽屉右缘把手), 不做 collapse
   return {
     position: 'fixed',
     top: '0',
     left: '0',
     bottom: '0',
-    width: 'var(--sidebar-width)',
-    maxWidth: '85vw',
+    width: store.mobileDrawerWidth + 'px',
+    maxWidth: '90vw',
     zIndex: '51',
     background: 'var(--bg-panel)',
     boxShadow: 'var(--shadow-xl)',
     transform: store.mobileDrawerOpen ? 'translateX(0)' : 'translateX(-100%)'
   };
 });
+
+// ===== 手机抽屉宽度拖拽 (右缘把手) =====
+const resizingDrawer = ref(false);
+
+function onDrawerResizeStart(e) {
+  if (e.button != null && e.button !== 0) return;
+  e.preventDefault();
+  resizingDrawer.value = true;
+  const startX = e.clientX;
+  const startW = store.mobileDrawerWidth;
+  const onMove = (ev) => store.setMobileDrawerWidth(startW + (ev.clientX - startX));
+  const onUp = () => {
+    resizingDrawer.value = false;
+    document.removeEventListener('pointermove', onMove);
+    document.removeEventListener('pointerup', onUp);
+  };
+  document.addEventListener('pointermove', onMove);
+  document.addEventListener('pointerup', onUp);
+}
 
 const activeItemStyle = {
   backgroundColor: 'var(--bg-active)',
@@ -255,4 +285,28 @@ watch(() => store.mobileDrawerOpen, (open) => {
   transform: rotate(90deg);
 }
 
+/* ===== 手机抽屉宽度拖拽把手 ===== */
+.drawer-resizer {
+  position: fixed;
+  top: 0;
+  bottom: 0;
+  width: 16px;
+  margin-left: -8px;
+  z-index: 60; /* 高于抽屉本体(z 51) */
+  cursor: col-resize;
+  touch-action: none;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+.drawer-resizer-grip {
+  width: 4px;
+  height: 44px;
+  border-radius: 3px;
+  background: var(--color-primary);
+  opacity: 0.55;
+  transition: opacity .15s;
+}
+.drawer-resizer:hover .drawer-resizer-grip,
+.drawer-resizer.active .drawer-resizer-grip { opacity: 1; height: 64px; }
 </style>

@@ -64,6 +64,10 @@ export const store = reactive({
   // 图片全屏预览是否打开: main.js 的全局 Esc 靠它判断该关谁,
   // 不然预览里按 Esc 会同时命中全局 closeEditor, 把整个编辑器退掉
   imagePreviewVisible: false,
+  // 手机端分类抽屉宽度 (抽屉右缘可拖拽调节, 持久化到 localStorage)
+  mobileDrawerWidth: (() => {
+    try { return parseInt(localStorage.getItem('quickmark-drawer-width')) || 264; } catch { return 264; }
+  })(),
   // 从某条笔记内打开图谱时记录该笔记 id: 图谱里它和它的链接邻居会用不同颜色突出;
   // 从侧栏全局打开时为 null, 全部节点走常规着色
   graphFocusNoteId: null,
@@ -452,6 +456,13 @@ export const store = reactive({
   setSidebarWidth(w) {
     store.sidebarWidth = Math.round(w);
     try { localStorage.setItem('quickmark-sidebar-width', String(store.sidebarWidth)); } catch {}
+  },
+
+  // 手机端抽屉宽度: 200px 到屏宽 90% 之间
+  setMobileDrawerWidth(w) {
+    const max = Math.max(240, window.innerWidth * 0.9);
+    store.mobileDrawerWidth = Math.round(Math.max(200, Math.min(w, max)));
+    try { localStorage.setItem('quickmark-drawer-width', String(store.mobileDrawerWidth)); } catch {}
   },
 
   setListWidth(w) {

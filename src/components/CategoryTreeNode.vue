@@ -34,6 +34,12 @@
         <!-- 名字 -->
         <span class="truncate" :title="node.name" v-text="node.name"></span>
       </span>
+      <!-- 长按全名气泡 (Teleport 到 body, 避免被行的 overflow-hidden 裁掉) -->
+      <Teleport to="body">
+        <div v-if="nameTip.visible" class="cat-name-tip"
+          :style="{ left: nameTip.x + 'px', top: nameTip.y + 'px' }"
+          v-text="node.name"></div>
+      </Teleport>
       <span class="flex items-center gap-1 flex-shrink-0">
         <span class="text-xs" style="color: var(--text-tertiary);" v-text="node.note_count"></span>
         <!-- 新建笔记 (在此分类下) -->
@@ -101,11 +107,11 @@
 // 模块级共享变量 — 跨所有 CategoryTreeNode 实例共享拖拽状态
 let dragCatId = null;
 // 触摸长按拖拽状态 (跨递归实例共享, 与 dragCatId 同理)
-let touchDrag = { timer: null, id: null, startY: 0, el: null, activated: false };
+let touchDrag = { timer: null, id: null, startY: 0, startX: 0, el: null, activated: false };
 </script>
 
 <script setup>
-import { ref } from 'vue';
+import { ref, reactive, Teleport } from 'vue';
 import { store } from '@/store';
 import API from '@/api/index.js';
 
@@ -117,6 +123,10 @@ const emit = defineEmits(['select', 'create-child', 'edit', 'delete', 'toggle-ex
 
 const dragging = ref(false);
 const dropHere = ref(false);
+
+// 长按显示完整分类名的气泡 (手机端名字被省略, title 无效; 桌面走原生 title)
+// 借用长按拖拽的激活时机显示, 触摸结束/取消时隐藏
+const nameTip = reactive({ visible: false, x: 0, y: 0 });
 
 function onDragStart(e) {
   dragging.value = true;
@@ -205,6 +215,7 @@ function onTouchStart(e) {
   const t = e.touches[0];
   touchDrag.id = props.node.id;
   touchDrag.startY = t.clientY;
+  touchDrag.startX = t.clientX;
   touchDrag.el = e.currentTarget;
   touchDrag.activated = false;
   touchDrag.timer = setTimeout(() => {
@@ -212,6 +223,10 @@ function onTouchStart(e) {
     dragCatId = props.node.id;
     dragging.value = true;
     touchDrag.el?.classList.add('cat-touch-lifted');
+    // 长按同时弹出全名气泡: 手机上名字被省略, 借长按看全名 (桌面走 title)
+    nameTip.x = touchDrag.startX;
+    nameTip.y = touchDrag.startY;
+    nameTip.visible = true;
     emit('drag-cat-start', props.node.id);
   }, TOUCH_LONG_PRESS_MS);
 }
@@ -260,8 +275,9 @@ async function onTouchEnd() {
   }
   const wasDragging = touchDrag.activated;
   dragging.value = false;
-  touchDrag = { timer: null, id: null, startY: 0, el: null, activated: false };
+  touchDrag = { timer: null, id: null, startY: 0, startX: 0, el: null, activated: false };
   dragCatId = null;
+  nameTip.visible = false;
   emit('drag-cat-end');
   if (wasDragging && fromId) {
     // 长按松手后系统会补发 click, 会误触发"选中分类", 这里吞掉它
@@ -279,8 +295,9 @@ function onTouchCancel() {
     touchDrag.el.style.transform = '';
   }
   dragging.value = false;
-  touchDrag = { timer: null, id: null, startY: 0, el: null, activated: false };
+  touchDrag = { timer: null, id: null, startY: 0, startX: 0, el: null, activated: false };
   dragCatId = null;
+  nameTip.visible = false;
   emit('drag-cat-end');
 }
 </script>
@@ -379,5 +396,23 @@ function onTouchCancel() {
   background: var(--color-primary);
   border-radius: 1px;
   opacity: 0.6;
+}
+
+/* 长按显示的分类全名气泡 (fixed 跟随手指位置) */
+.cat-name-tip {
+  position: fixed;
+  transform: translate(-50%, -130%);
+  background: rgba(17, 24, 39, 0.92);
+  color: #fff;
+  padding: 6px 12px;
+  border-radius: 8px;
+  font-size: 13px;
+  line-height: 1.4;
+  max-width: 80vw;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  z-index: 500;
+  pointer-events: none;
 }
 </style>
