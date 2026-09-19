@@ -69,8 +69,12 @@
       </button>
     </div>
 
-    <!-- 分类列表 (树形) -->
-    <nav class="flex-1 panel-scroll px-3 pb-4" aria-label="分类" data-tour="sidebar">
+      <!-- 分类列表 (树形) -->
+      <!-- 整个侧栏都是笔记拖放的放置区: 落在行间距/内边距空隙时, 由 onCategoryListDrop 取最近分类行 -->
+      <nav class="flex-1 panel-scroll px-3 pb-4"
+        aria-label="分类" data-tour="sidebar"
+        @dragover="onCategoryListDragOver"
+        @drop="onCategoryListDrop">
       <div class="flex items-center justify-between px-2 mb-2 mt-3">
         <h2 class="text-xs font-semibold uppercase tracking-wider"
           style="color: var(--text-tertiary);">分类</h2>
@@ -216,6 +220,39 @@ const idleItemStyle = {
 
 function selectCategory(node) {
   store.selectCategory(node.id);
+}
+
+// ===== 笔记拖放到侧栏: 让整个分类列表区域都成为有效放置目标 =====
+function onCategoryListDragOver(e) {
+  // 仅当拖的是笔记时阻止默认行为, 允许在侧栏任意位置 (含行间距/内边距) 放置
+  if (e.dataTransfer && e.dataTransfer.types &&
+      e.dataTransfer.types.includes('application/x-quickmark-note')) {
+    e.preventDefault();
+  }
+}
+
+async function onCategoryListDrop(e) {
+  const noteId = e.dataTransfer && e.dataTransfer.getData('application/x-quickmark-note');
+  if (!noteId) return; // 不是笔记拖放 (分类重排交给 CategoryTreeNode 处理)
+  e.preventDefault();
+  // 优先用光标下的分类行; 落在空隙则取垂直最近的分类行 (覆盖行间距/内边距落点)
+  let row = e.target.closest && e.target.closest('.category-row');
+  if (!row) {
+    const y = e.clientY;
+    let best = null;
+    let bestDist = Infinity;
+    for (const r of document.querySelectorAll('.category-row')) {
+      const rect = r.getBoundingClientRect();
+      const dist = Math.abs(y - (rect.top + rect.height / 2));
+      if (dist < bestDist) { bestDist = dist; best = r; }
+    }
+    row = best;
+  }
+  if (!row) return;
+  const catId = Number(row.dataset.catId);
+  if (!catId) return;
+  e.stopPropagation(); // 与行内 onDrop 二选一, 避免重复处理
+  await store.moveNoteToCategory(Number(noteId), catId);
 }
 function createTopCategory() {
   store.categoryForm = { name: '', color: '#5B8DEF', parent_id: null };

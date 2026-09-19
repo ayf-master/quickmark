@@ -9,6 +9,7 @@
       @touchcancel="onTouchCancel"
       @dragstart="onDragStart"
       @dragover.prevent="onDragOver"
+      @dragleave="onNoteDragLeave"
       @drop.prevent="onDrop"
       @dragend="onDragEnd"
       :class="['w-full text-left px-2 py-1.5 rounded-lg text-sm flex items-center justify-between transition-all mb-0.5 group category-row min-w-0 overflow-hidden', { 'is-selected': store.selectedCategoryId === node.id, 'cat-dragging': dragging, 'cat-drop-here': dropHere }]">
@@ -140,8 +141,9 @@ function onDragStart(e) {
 }
 
 function onDragOver(e) {
-  // Note drag (cross-zone from NoteList) — no visual feedback needed, just allow drop
+  // Note drag (cross-zone from NoteList) — 高亮当前分类行, 提示可放置
   if (e.dataTransfer.types && e.dataTransfer.types.includes('application/x-quickmark-note')) {
+    dropHere.value = true;
     return;
   }
   // Category drag (reorder)
@@ -149,6 +151,11 @@ function onDragOver(e) {
     dropHere.value = true;
     emit('drag-cat-over', props.node.id);
   }
+}
+
+// 笔记拖放移出本行时, 取消高亮 (dragover 会持续把光标所在行设回 true, 不会闪烁)
+function onNoteDragLeave() {
+  dropHere.value = false;
 }
 
 // 核心重排逻辑: 桌面 drop / 触摸放置共用 (只重排与目标同级的分类)
@@ -189,7 +196,9 @@ async function onDrop(e) {
   // Note drop: move note to this category
   const noteId = e.dataTransfer.getData('application/x-quickmark-note');
   if (noteId) {
+    e.stopPropagation(); // 阻止冒泡到侧栏容器, 避免重复处理
     dragCatId = null;
+    dropHere.value = false;
     await store.moveNoteToCategory(Number(noteId), props.node.id);
     return;
   }

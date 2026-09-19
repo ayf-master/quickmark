@@ -914,18 +914,33 @@ export const store = reactive({
 
   // 拖拽笔记到分类：直接替换笔记的分类
   async moveNoteToCategory(noteId, catId) {
+    // 先记下原分类: 若当前正处于该分类视图, 移动后需把笔记从列表移除, 避免残留
+    const idx = store.notes.findIndex(n => n.id === noteId);
+    const oldCatId = idx !== -1 && store.notes[idx].category_ids
+      ? store.notes[idx].category_ids[0]
+      : undefined;
+    if (idx !== -1 && oldCatId === catId) {
+      // 拖到自己的分类, 无需任何变更
+      return;
+    }
     try {
       await API.updateNote(noteId, { category_ids: [catId] });
-      // 更新本地 store 中的笔记数据
-      const idx = store.notes.findIndex(n => n.id === noteId);
+      // 更新本地 store 中的笔记数据 (标题/内容不变, 仅分类)
       if (idx !== -1) {
         const cat = store.categories.find(c => c.id === catId);
         store.notes[idx].category_ids = [catId];
         store.notes[idx].category_names = cat ? [cat.name] : [];
-        store.noteListVersion = Date.now();
       }
-      store.showToast('分类已变更');
+      // 若当前正处于某个分类视图, 且被移动的笔记原来就属于该视图 → 从列表移除
+      // (全部笔记视图下保留笔记, 仅其分类标签变更, 符合预期)
+      if (store.selectedCategoryId && oldCatId === store.selectedCategoryId) {
+        store.notes = store.notes.filter(n => n.id !== noteId);
+      }
+      store.noteListVersion = Date.now();
+      // 刷新各分类计数 (分类节点上的角标)
       store.loadCategories();
+      const catName = store.categories.find(c => c.id === catId)?.name || '分类';
+      store.showToast('已移动到「' + catName + '」');
     } catch (err) {
       console.error('移动笔记失败:', err);
       store.showToast('分类变更失败', 'error');
