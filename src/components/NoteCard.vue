@@ -13,6 +13,19 @@
     style="margin-bottom: 10px; position: relative;">
     <!-- 到期复习标记 -->
     <span v-if="isDue" class="due-badge" title="到期复习">🔄</span>
+    <!-- 移动笔记到分类 (仅手机端显示): 打开全屏分类页选择模式 -->
+    <button v-if="store.isMobile"
+      @click.stop="openMovePicker"
+      class="card-move-btn"
+      :aria-label="'移动笔记 ' + (note.title || '无标题') + ' 到分类'"
+      title="移动到分类">
+      <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+          d="M3 7a2 2 0 012-2h4l2 2h8a2 2 0 012 2v8a2 2 0 01-2 2H5a2 2 0 01-2-2V7z"/>
+        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 11v4m0 0l-1.5-1.5M12 15l1.5-1.5"/>
+      </svg>
+    </button>
+
     <!-- 删除按钮 (hover 出现) -->
     <button
       @click.stop="confirmDelete"
@@ -66,6 +79,12 @@ const props = defineProps({
 
 const emit = defineEmits(['select', 'delete']);
 
+// 手机端: 打开全屏分类页的"选择模式", 为当前笔记挑选目标分类
+function openMovePicker() {
+  store.mobileCategoryPickNoteId = props.note.id;
+  store.mobileCategoryPageOpen = true;
+}
+
 function confirmDelete(e) {
   const title = props.note.title || '无标题';
   if (!confirm(`确定删除笔记「${title}」吗?`)) return;
@@ -103,6 +122,27 @@ function confirmDelete(e) {
 .card-delete-btn:hover {
   background: var(--color-danger-subtle, #FEE2E2);
   color: var(--color-danger, #DC2626);
+}
+/* 移动端"移动到分类"按钮: 位于删除按钮左侧; v-if="store.isMobile" 控制仅手机渲染 */
+.card-move-btn {
+  position: absolute;
+  top: 8px;
+  right: 40px;
+  width: 26px;
+  height: 26px;
+  border-radius: 6px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: transparent;
+  color: var(--text-tertiary);
+  opacity: 1;
+  cursor: pointer;
+  border: none;
+}
+.card-move-btn:active {
+  background: var(--color-primary-subtle, rgba(91,110,245,0.12));
+  color: var(--color-primary);
 }
 /* 仅有鼠标的设备: 恢复悬停显示, 避免常显按钮干扰视觉 */
 @media (hover: hover) and (pointer: fine) {

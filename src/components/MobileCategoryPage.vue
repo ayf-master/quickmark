@@ -11,8 +11,8 @@
             <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 19l-7-7 7-7"/>
           </svg>
         </button>
-        <h2 class="mcp-title">分类</h2>
-        <button class="btn btn-icon btn-ghost" @click="createTopCategory"
+        <h2 class="mcp-title" v-text="pickMode ? '移动到分类' : '分类'"></h2>
+        <button v-if="!pickMode" class="btn btn-icon btn-ghost" @click="createTopCategory"
           aria-label="新建分类" title="新建分类">
           <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
             <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4"/>
@@ -39,8 +39,8 @@
       </div>
 
       <div class="mcp-scroll panel-scroll">
-        <!-- 全部笔记 -->
-        <button @click="store.selectAllNotes()"
+        <!-- 全部笔记 (普通模式) / 移除分类=未分类 (选择模式) -->
+        <button v-if="!pickMode" @click="store.selectAllNotes()"
           class="mcp-row"
           :style="!store.selectedCategoryId ? activeItemStyle : idleItemStyle">
           <span class="flex items-center gap-2.5">
@@ -51,6 +51,17 @@
             全部笔记
           </span>
           <span class="text-xs" style="color: var(--text-tertiary);" v-text="store.allNotesCount"></span>
+        </button>
+        <button v-else @click="moveToUncategorized()"
+          class="mcp-row"
+          :style="idleItemStyle">
+          <span class="flex items-center gap-2.5">
+            <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                d="M3 7a2 2 0 012-2h4l2 2h8a2 2 0 012 2v8a2 2 0 01-2 2H5a2 2 0 01-2-2V7z"/>
+            </svg>
+            移除分类（设为未分类）
+          </span>
         </button>
 
         <div class="flex items-center justify-between px-2 mb-2 mt-4">
@@ -73,6 +84,7 @@
             v-for="root in store.filteredCategoryTree"
             :key="root.id"
             :node="root"
+            :pick-mode="pickMode"
             @select="onSelect"
             @create-child="createChildCategory"
             @edit="onEdit"
@@ -80,8 +92,8 @@
             @toggle-expand="store.toggleCategoryExpanded" />
         </div>
 
-        <!-- 底部: 知识图谱入口 -->
-        <button @click="openGraph"
+        <!-- 底部: 知识图谱入口 (选择模式下隐藏) -->
+        <button v-if="!pickMode" @click="openGraph"
           class="mcp-row mt-4"
           style="color: var(--text-secondary);">
           <span class="flex items-center gap-2.5">
@@ -96,18 +108,21 @@
           </span>
         </button>
 
-        <p class="mcp-hint">提示: 拖动每行左侧的 ⋮⋮ 手柄可调整分类顺序</p>
+        <p v-if="!pickMode" class="mcp-hint">提示: 拖动每行左侧的 ⋮⋮ 手柄可调整分类顺序</p>
       </div>
     </div>
   </Teleport>
 </template>
 
 <script setup>
-import { ref, onMounted } from 'vue';
+import { ref, computed, onMounted } from 'vue';
 import { store } from '@/store';
 import CategoryTreeNode from '@/components/CategoryTreeNode.vue';
 
 const pageRef = ref(null);
+
+// 选择模式: 正在为某条笔记挑选目标分类
+const pickMode = computed(() => store.mobileCategoryPickNoteId != null);
 
 const activeItemStyle = {
   backgroundColor: 'var(--bg-active)',
@@ -120,11 +135,25 @@ const idleItemStyle = {
 
 function close() {
   store.mobileCategoryPageOpen = false;
+  store.mobileCategoryPickNoteId = null;
 }
 
-// 选中分类: store.selectCategory 已顺带关闭本页
-function onSelect(node) {
+// 选中分类: 普通模式=筛选笔记; 选择模式=把目标笔记移动到该分类
+async function onSelect(node) {
+  if (pickMode.value) {
+    const noteId = store.mobileCategoryPickNoteId;
+    close();
+    if (noteId != null) await store.moveNoteToCategory(noteId, node.id);
+    return;
+  }
   store.selectCategory(node.id);
+}
+
+// 选择模式: 把目标笔记设为"未分类"
+async function moveToUncategorized() {
+  const noteId = store.mobileCategoryPickNoteId;
+  close();
+  if (noteId != null) await store.moveNoteToCategory(noteId, null);
 }
 
 function onEdit(node) {

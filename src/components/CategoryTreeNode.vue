@@ -15,6 +15,7 @@
       <span class="flex items-center gap-1.5 min-w-0 flex-1">
         <!-- 拖拽排序手柄 (仅触摸设备显示): 图标无文字, 长按不会触发系统识屏弹窗 -->
         <button type="button" class="cat-drag-handle"
+          v-if="!pickMode"
           @touchstart.stop="onHandleTouchStart"
           @click.stop
           aria-label="拖动排序分类"
@@ -50,7 +51,7 @@
       <span class="flex items-center gap-1 flex-shrink-0">
         <span class="text-xs" style="color: var(--text-tertiary);" v-text="node.note_count"></span>
         <!-- 新建笔记 (在此分类下) -->
-        <button @click.stop="store.createNote(node.id)"
+        <button v-if="!pickMode" @click.stop="store.createNote(node.id)"
           class="btn btn-icon-sm btn-ghost"
           :aria-label="'在 ' + node.name + ' 中新建笔记'"
           :title="'在 ' + node.name + ' 中新建笔记'">
@@ -59,7 +60,7 @@
           </svg>
         </button>
         <!-- 新建子分类 (hover 才出现) -->
-        <button @click.stop="$emit('create-child', node.id)"
+        <button v-if="!pickMode" @click.stop="$emit('create-child', node.id)"
           class="btn btn-icon-sm btn-ghost action-hover"
           :aria-label="'在 ' + node.name + ' 下新建子分类'"
           :title="'在 ' + node.name + ' 下新建子分类'">
@@ -69,7 +70,7 @@
           </svg>
         </button>
         <!-- 编辑 -->
-        <button @click.stop="$emit('edit', node)"
+        <button v-if="!pickMode" @click.stop="$emit('edit', node)"
           class="btn btn-icon-sm btn-ghost action-hover"
           :aria-label="'编辑分类 ' + node.name"
           title="编辑">
@@ -79,7 +80,7 @@
           </svg>
         </button>
         <!-- 删除 -->
-        <button @click.stop="$emit('delete', node)"
+        <button v-if="!pickMode" @click.stop="$emit('delete', node)"
           class="btn btn-icon-sm btn-ghost action-hover"
           :aria-label="'删除分类 ' + node.name"
           title="删除">
@@ -101,6 +102,7 @@
         :key="child.id"
         :node="child"
         :depth="depth + 1"
+        :pick-mode="pickMode"
         @select="(n) => $emit('select', n)"
         @create-child="(pid) => $emit('create-child', pid)"
         @edit="(n) => $emit('edit', n)"
@@ -124,7 +126,8 @@ import API from '@/api/index.js';
 
 const props = defineProps({
   node: { type: Object, required: true },
-  depth: { type: Number, default: 0 }
+  depth: { type: Number, default: 0 },
+  pickMode: { type: Boolean, default: false }
 });
 const emit = defineEmits(['select', 'create-child', 'edit', 'delete', 'toggle-expand', 'drag-cat-start', 'drag-cat-over', 'drag-cat-drop', 'drag-cat-end']);
 
