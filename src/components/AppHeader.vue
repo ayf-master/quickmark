@@ -14,12 +14,12 @@
         </svg>
       </button>
 
-      <!-- 手机: 汉堡按钮 (平板/桌面侧栏常显) -->
+      <!-- 手机: 汉堡按钮 → 打开全屏分类页 (替代窄抽屉, 避免 Vivo 长按识屏问题) -->
       <button v-if="store.isMobile"
         class="btn btn-icon btn-ghost"
-        @click="store.mobileDrawerOpen = true"
-        aria-label="打开菜单"
-        :aria-expanded="store.mobileDrawerOpen">
+        @click="store.mobileCategoryPageOpen = true"
+        aria-label="打开分类"
+        :aria-expanded="store.mobileCategoryPageOpen">
         <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
           <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 6h16M4 12h16M4 18h16"/>
         </svg>

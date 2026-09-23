@@ -85,6 +85,8 @@ export const store = reactive({
 
   // ===== UI state =====
   mobileDrawerOpen: false,
+  // 手机端全屏分类页: 由顶栏汉堡按钮打开, 替代窄抽屉 (Vivo 等 ROM 长按文字会弹系统识屏, 故不再用长按看全名)
+  mobileCategoryPageOpen: false,
   sidebarCollapsed: false, // 桌面端侧边栏折叠
   noteListCollapsed: false, // 桌面端笔记列表折叠
 
@@ -441,6 +443,7 @@ export const store = reactive({
     store.selectedCategoryId = null;
     store.searchQuery = '';
     store.mobileDrawerOpen = false;
+    store.mobileCategoryPageOpen = false;
     store.loadNotes();
   },
 
@@ -448,6 +451,7 @@ export const store = reactive({
     store.selectedCategoryId = id;
     store.searchQuery = '';
     store.mobileDrawerOpen = false;
+    store.mobileCategoryPageOpen = false;
     store.loadNotes();
   },
 
@@ -495,6 +499,7 @@ export const store = reactive({
   // 打开新建笔记弹层 (v1.1: 先选分类再建, 避免笔记无家可归)
   openNewNoteDialog() {
     store.mobileDrawerOpen = false;
+    store.mobileCategoryPageOpen = false;
     store.newNoteDialogOpen = true;
   },
 
@@ -502,6 +507,7 @@ export const store = reactive({
   // categoryId 必须有 (弹层已保证); title 可选, 默认 "新笔记"
   async createNote(categoryId = null, title = null) {
     store.mobileDrawerOpen = false;
+    store.mobileCategoryPageOpen = false;
     try {
       const payload = {
         title: title || '新笔记',

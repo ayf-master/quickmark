@@ -64,6 +64,8 @@
       <UserGuide />
       <OnboardingTour />
       <KnowledgeGraph />
+      <!-- 手机端全屏分类页 (替代窄抽屉, 解决 Vivo 长按识屏/名字截断) -->
+      <MobileCategoryPage v-if="store.isMobile && store.mobileCategoryPageOpen" />
             <FeedbackDialog :visible="feedbackVisible" @close="feedbackVisible = false" />
       <FeedbackAdmin :visible="feedbackAdminVisible" @close="feedbackAdminVisible = false" />
       <Toast />
@@ -93,6 +95,7 @@ import FeedbackDialog from '@/components/FeedbackDialog.vue';
 import FeedbackAdmin from '@/components/FeedbackAdmin.vue';
 import KnowledgeGraph from '@/components/KnowledgeGraph.vue';
 import ExtensionSlot from '@/components/ExtensionSlot.vue';
+import MobileCategoryPage from '@/components/MobileCategoryPage.vue';
 import LayoutResizer from '@/components/LayoutResizer.vue';
 import API from '@/api/index.js';
 import { initFeatures, resetFeatures } from '@/store/features.js';

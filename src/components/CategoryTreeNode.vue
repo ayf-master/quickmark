@@ -1,9 +1,8 @@
 <template>
   <div>
-    <div draggable="true"
+    <div :draggable="!store.isMobile"
       :data-cat-id="node.id"
       @click="$emit('select', node)"
-      @touchstart.passive="onTouchStart"
       @touchmove="onTouchMove"
       @touchend="onTouchEnd"
       @touchcancel="onTouchCancel"
@@ -12,8 +11,21 @@
       @dragleave="onNoteDragLeave"
       @drop.prevent="onDrop"
       @dragend="onDragEnd"
-      :class="['w-full text-left px-2 py-1.5 rounded-lg text-sm flex items-center justify-between transition-all mb-0.5 group category-row min-w-0 overflow-hidden', { 'is-selected': store.selectedCategoryId === node.id, 'cat-dragging': dragging, 'cat-drop-here': dropHere }]">
+      :class="['w-full text-left px-2 py-1.5 rounded-lg text-sm flex items-center justify-between transition-all mb-0.5 group category-row min-w-0', { 'is-selected': store.selectedCategoryId === node.id, 'cat-dragging': dragging, 'cat-drop-here': dropHere }]">
       <span class="flex items-center gap-1.5 min-w-0 flex-1">
+        <!-- 拖拽排序手柄 (仅触摸设备显示): 图标无文字, 长按不会触发系统识屏弹窗 -->
+        <button type="button" class="cat-drag-handle"
+          @touchstart.stop="onHandleTouchStart"
+          @click.stop
+          aria-label="拖动排序分类"
+          title="拖动排序">
+          <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <circle cx="9" cy="6" r="1.4"/><circle cx="15" cy="6" r="1.4"/>
+            <circle cx="9" cy="12" r="1.4"/><circle cx="15" cy="12" r="1.4"/>
+            <circle cx="9" cy="18" r="1.4"/><circle cx="15" cy="18" r="1.4"/>
+          </svg>
+        </button>
+
         <!-- 展开/折叠箭头 -->
         <button v-if="node.children && node.children.length > 0"
           @click.stop="$emit('toggle-expand', node.id)"
@@ -32,16 +44,9 @@
         <span class="w-2 h-2 rounded-full flex-shrink-0"
           :style="{ backgroundColor: node.color }"></span>
 
-        <!-- 名字 -->
-        <span ref="nameSpanRef" class="truncate" :title="node.name" v-text="node.name"></span>
+        <!-- 名字 (手机端分类页里会换行完整显示, 不再省略) -->
+        <span class="truncate" :title="node.name" v-text="node.name"></span>
       </span>
-      <!-- 长按全名气泡 (Teleport 到 body, 避免被行的 overflow-hidden 裁掉) -->
-      <Teleport to="body">
-        <div v-if="nameTip.visible" class="cat-name-tip"
-          :class="{ 'tip-below': nameTip.below }"
-          :style="{ left: nameTip.x + 'px', top: nameTip.y + 'px' }"
-          v-text="node.name"></div>
-      </Teleport>
       <span class="flex items-center gap-1 flex-shrink-0">
         <span class="text-xs" style="color: var(--text-tertiary);" v-text="node.note_count"></span>
         <!-- 新建笔记 (在此分类下) -->
@@ -113,7 +118,7 @@ let touchDrag = { timer: null, id: null, startY: 0, startX: 0, el: null, activat
 </script>
 
 <script setup>
-import { ref, reactive, Teleport } from 'vue';
+import { ref } from 'vue';
 import { store } from '@/store';
 import API from '@/api/index.js';
 
@@ -125,12 +130,6 @@ const emit = defineEmits(['select', 'create-child', 'edit', 'delete', 'toggle-ex
 
 const dragging = ref(false);
 const dropHere = ref(false);
-
-// 长按显示完整分类名的气泡 (手机端名字被省略, title 无效; 桌面走原生 title)
-// 借用长按拖拽的激活时机显示, 触摸结束/取消时隐藏
-const nameTip = reactive({ visible: false, x: 0, y: 0, below: false });
-// 名字 span 引用: 用于判断是否真的被截断, 未截断则不弹气泡(短名冗余)
-const nameSpanRef = ref(null);
 
 function onDragStart(e) {
   dragging.value = true;
@@ -215,39 +214,29 @@ function onDragEnd() {
   emit('drag-cat-end');
 }
 
-// ===== 触摸长按拖拽排序 (手机/平板) =====
+// ===== 触摸排序: 由行内的拖拽手柄触发 (手机/平板) =====
+// 注意: 不在整行做长按, 因为 Vivo 等 ROM 会把"长按文字"识别成系统识屏弹窗;
+// 手柄是纯图标(无文字), 长按/按住它不会触发系统识屏, 体验稳定
 const TOUCH_LONG_PRESS_MS = 400;
 
 function clearDropHereAll() {
   document.querySelectorAll('.category-row.cat-drop-here').forEach(el => el.classList.remove('cat-drop-here'));
 }
 
-function onTouchStart(e) {
+// 手柄按下即进入拖拽态 (图标无文字, 不会触发系统识屏)
+function onHandleTouchStart(e) {
   if (e.touches.length !== 1 || dragCatId) return;
+  e.preventDefault(); // 阻止滚动与系统对手柄图标的长按菜单
   const t = e.touches[0];
   touchDrag.id = props.node.id;
   touchDrag.startY = t.clientY;
   touchDrag.startX = t.clientX;
-  touchDrag.el = e.currentTarget;
-  touchDrag.activated = false;
-  touchDrag.timer = setTimeout(() => {
-    touchDrag.activated = true;
-    dragCatId = props.node.id;
-    dragging.value = true;
-    touchDrag.el?.classList.add('cat-touch-lifted');
-    // 长按同时弹出全名气泡: 仅当名字确实被截断时才显示, 避免短名冗余
-    // (桌面走原生 title, 这里只在手机端生效)
-    const span = nameSpanRef.value;
-    const truncated = !span || span.scrollWidth > span.clientWidth + 1;
-    if (truncated) {
-      nameTip.x = touchDrag.startX;
-      nameTip.y = touchDrag.startY;
-      // 手指靠近屏幕顶部时, 气泡翻到手指下方, 避免被顶部裁掉
-      nameTip.below = touchDrag.startY < 80;
-      nameTip.visible = true;
-    }
-    emit('drag-cat-start', props.node.id);
-  }, TOUCH_LONG_PRESS_MS);
+  touchDrag.el = e.currentTarget.closest('.category-row');
+  touchDrag.activated = true;
+  dragCatId = props.node.id;
+  dragging.value = true;
+  touchDrag.el?.classList.add('cat-touch-lifted');
+  emit('drag-cat-start', props.node.id);
 }
 
 function onTouchMove(e) {
@@ -296,10 +285,9 @@ async function onTouchEnd() {
   dragging.value = false;
   touchDrag = { timer: null, id: null, startY: 0, startX: 0, el: null, activated: false };
   dragCatId = null;
-  nameTip.visible = false;
   emit('drag-cat-end');
   if (wasDragging && fromId) {
-    // 长按松手后系统会补发 click, 会误触发"选中分类", 这里吞掉它
+    // 拖拽松手后系统可能补发 click, 会误触发"选中分类", 这里吞掉它
     const swallowClick = (ev) => { ev.preventDefault(); ev.stopPropagation(); document.removeEventListener('click', swallowClick, true); };
     document.addEventListener('click', swallowClick, true);
     await reorderCategory(fromId, toId);
@@ -316,7 +304,6 @@ function onTouchCancel() {
   dragging.value = false;
   touchDrag = { timer: null, id: null, startY: 0, startX: 0, el: null, activated: false };
   dragCatId = null;
-  nameTip.visible = false;
   emit('drag-cat-end');
 }
 </script>
@@ -417,25 +404,24 @@ function onTouchCancel() {
   opacity: 0.6;
 }
 
-/* 长按显示的分类全名气泡 (fixed 跟随手指位置) */
-.cat-name-tip {
-  position: fixed;
-  transform: translate(-50%, calc(-100% - 8px));
-  background: rgba(17, 24, 39, 0.92);
-  color: #fff;
-  padding: 6px 12px;
-  border-radius: 8px;
-  font-size: 13px;
-  line-height: 1.4;
-  max-width: 86vw;
-  /* 关键: 不裁切、不省略, 超长名字整体显示; 必要时换行而非截断 */
-  white-space: normal;
-  overflow-wrap: anywhere;
-  z-index: 500;
-  pointer-events: none;
+/* 拖拽排序手柄: 仅触摸设备显示, 图标无文字不会触发系统识屏 */
+.cat-drag-handle {
+  display: none;
+  align-items: center;
+  justify-content: center;
+  width: 18px;
+  height: 22px;
+  flex-shrink: 0;
+  margin-left: -2px;
+  color: var(--text-tertiary);
+  cursor: grab;
+  touch-action: none; /* 手柄上不滚动/不缩放, 保证拖拽手势干净 */
+  background: transparent;
+  border: 0;
+  padding: 0;
 }
-/* 手指靠近屏幕顶部时翻到下方显示, 避免被顶边裁掉 */
-.cat-name-tip.tip-below {
-  transform: translate(-50%, 8px);
+.cat-drag-handle:active { color: var(--color-primary); cursor: grabbing; }
+@media (hover: none) {
+  .cat-drag-handle { display: inline-flex; }
 }
 </style>
