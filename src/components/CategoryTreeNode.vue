@@ -409,18 +409,24 @@ function onTouchCancel() {
   display: none;
   align-items: center;
   justify-content: center;
-  width: 18px;
-  height: 22px;
+  width: 24px;
+  height: 30px;
   flex-shrink: 0;
-  margin-left: -2px;
+  margin-left: -4px;
+  margin-right: 2px;
   color: var(--text-tertiary);
   cursor: grab;
   touch-action: none; /* 手柄上不滚动/不缩放, 保证拖拽手势干净 */
-  background: transparent;
+  background: var(--bg-hover, rgba(0,0,0,0.04));
   border: 0;
+  border-radius: 6px;
   padding: 0;
 }
-.cat-drag-handle:active { color: var(--color-primary); cursor: grabbing; }
+.cat-drag-handle:active {
+  color: var(--color-primary);
+  background: var(--color-primary-subtle, rgba(91,110,245,0.12));
+  cursor: grabbing;
+}
 @media (hover: none) {
   .cat-drag-handle { display: inline-flex; }
 }
