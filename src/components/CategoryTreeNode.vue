@@ -3,6 +3,7 @@
     <div :draggable="!store.isMobile"
       :data-cat-id="node.id"
       @click="$emit('select', node)"
+      @touchstart="onTouchStart"
       @touchmove="onTouchMove"
       @touchend="onTouchEnd"
       @touchcancel="onTouchCancel"
@@ -13,19 +14,6 @@
       @dragend="onDragEnd"
       :class="['w-full text-left px-2 py-1.5 rounded-lg text-sm flex items-center justify-between transition-all mb-0.5 group category-row min-w-0', { 'is-selected': store.selectedCategoryId === node.id, 'cat-dragging': dragging, 'cat-drop-here': dropHere }]">
       <span class="flex items-center gap-1.5 min-w-0 flex-1">
-        <!-- 拖拽排序手柄 (仅触摸设备显示): 图标无文字, 长按不会触发系统识屏弹窗 -->
-        <button type="button" class="cat-drag-handle"
-          @touchstart.stop="onHandleTouchStart"
-          @click.stop
-          aria-label="拖动排序分类"
-          title="拖动排序">
-          <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-            <circle cx="9" cy="6" r="1.4"/><circle cx="15" cy="6" r="1.4"/>
-            <circle cx="9" cy="12" r="1.4"/><circle cx="15" cy="12" r="1.4"/>
-            <circle cx="9" cy="18" r="1.4"/><circle cx="15" cy="18" r="1.4"/>
-          </svg>
-        </button>
-
         <!-- 展开/折叠箭头 -->
         <button v-if="node.children && node.children.length > 0"
           @click.stop="$emit('toggle-expand', node.id)"
@@ -214,39 +202,46 @@ function onDragEnd() {
   emit('drag-cat-end');
 }
 
-// ===== 触摸排序: 由行内的拖拽手柄触发 (手机/平板) =====
-// 注意: 不在整行做长按, 因为 Vivo 等 ROM 会把"长按文字"识别成系统识屏弹窗;
-// 手柄是纯图标(无文字), 长按/按住它不会触发系统识屏, 体验稳定
-const TOUCH_LONG_PRESS_MS = 400;
+// ===== 触摸排序: 整行长按进入拖拽态 (手机/平板) =====
+// 触屏没有鼠标滚轮, 整行拖会和"上下滑滚动"冲突; 用"长按 350ms 再拖"区分:
+// 手指按住不动超过阈值 = 进入拖拽; 一上来就滑动 = 视为滚动, 取消长按。
+// 注: Vivo 等 ROM 长按文字可能弹系统识屏, 这是整行长按方案的固有代价(用户已知晓并接受)。
+const TOUCH_LONG_PRESS_MS = 350;
 
 function clearDropHereAll() {
   document.querySelectorAll('.category-row.cat-drop-here').forEach(el => el.classList.remove('cat-drop-here'));
 }
 
-// 手柄按下即进入拖拽态 (图标无文字, 不会触发系统识屏)
-function onHandleTouchStart(e) {
-  if (e.touches.length !== 1 || dragCatId) return;
-  e.preventDefault(); // 阻止滚动与系统对手柄图标的长按菜单
+// 整行 touchstart: 记录起点, 启动长按计时器 (不 preventDefault, 保证列表可照常滑动)
+function onTouchStart(e) {
+  if (!store.isMobile || e.touches.length !== 1 || dragCatId) return;
   const t = e.touches[0];
   touchDrag.id = props.node.id;
   touchDrag.startY = t.clientY;
   touchDrag.startX = t.clientX;
   touchDrag.el = e.currentTarget.closest('.category-row');
-  touchDrag.activated = true;
-  dragCatId = props.node.id;
-  dragging.value = true;
-  touchDrag.el?.classList.add('cat-touch-lifted');
-  emit('drag-cat-start', props.node.id);
+  touchDrag.activated = false;
+  clearTimeout(touchDrag.timer);
+  touchDrag.timer = setTimeout(() => {
+    if (touchDrag.id == null) return;
+    // 长按达成: 进入拖拽态, 整行浮起
+    touchDrag.activated = true;
+    dragCatId = props.node.id;
+    dragging.value = true;
+    touchDrag.el?.classList.add('cat-touch-lifted');
+    emit('drag-cat-start', props.node.id);
+  }, TOUCH_LONG_PRESS_MS);
 }
 
 function onTouchMove(e) {
-  if (!dragCatId) {
-    // 长按未激活: 手指移动超过阈值视为滚动, 取消长按
-    if (touchDrag.id != null && e.touches.length) {
-      if (Math.abs(e.touches[0].clientY - touchDrag.startY) > 10) {
-        clearTimeout(touchDrag.timer);
-        touchDrag.id = null;
-      }
+  if (touchDrag.id == null && !dragCatId) return;
+  // 长按未激活: 手指移动超过阈值 → 视为滚动, 取消长按, 不进入拖拽
+  if (!touchDrag.activated && touchDrag.id != null) {
+    const dy = Math.abs(e.touches[0].clientY - touchDrag.startY);
+    const dx = Math.abs(e.touches[0].clientX - touchDrag.startX);
+    if (dy > 10 || dx > 10) {
+      clearTimeout(touchDrag.timer);
+      touchDrag.id = null;
     }
     return;
   }
@@ -404,30 +399,4 @@ function onTouchCancel() {
   opacity: 0.6;
 }
 
-/* 拖拽排序手柄: 仅触摸设备显示, 图标无文字不会触发系统识屏 */
-.cat-drag-handle {
-  display: none;
-  align-items: center;
-  justify-content: center;
-  width: 24px;
-  height: 30px;
-  flex-shrink: 0;
-  margin-left: -4px;
-  margin-right: 2px;
-  color: var(--text-tertiary);
-  cursor: grab;
-  touch-action: none; /* 手柄上不滚动/不缩放, 保证拖拽手势干净 */
-  background: var(--bg-hover, rgba(0,0,0,0.04));
-  border: 0;
-  border-radius: 6px;
-  padding: 0;
-}
-.cat-drag-handle:active {
-  color: var(--color-primary);
-  background: var(--color-primary-subtle, rgba(91,110,245,0.12));
-  cursor: grabbing;
-}
-@media (hover: none) {
-  .cat-drag-handle { display: inline-flex; }
-}
 </style>

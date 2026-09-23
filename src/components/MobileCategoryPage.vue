@@ -96,7 +96,7 @@
           </span>
         </button>
 
-        <p class="mcp-hint">提示: 拖动每行左侧的 ⋮⋮ 手柄可调整分类顺序</p>
+        <p class="mcp-hint">提示: 长按分类行可拖动调整顺序</p>
       </div>
     </div>
   </Teleport>

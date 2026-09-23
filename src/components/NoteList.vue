@@ -93,29 +93,17 @@
           :key="note.id"
           :data-id="note.id"
           ref="noteEls"
-          draggable="true"
+          :draggable="!store.isMobile"
           @dragstart="onNoteDragStart($event, note.id)"
           @dragover.prevent="onNoteDragOver($event, note.id)"
           @drop.prevent="onNoteDrop($event, note.id)"
           @dragend="onNoteDragEnd"
+          @touchstart="onNoteTouchStart"
+          @touchmove="onNoteTouchMove"
+          @touchend="onNoteTouchEnd"
+          @touchcancel="onNoteTouchCancel"
           :class="['fade-in-up', { 'note-dragging': dragNoteId === note.id, 'note-drop-here': dragOverNoteId === note.id }]"
           :style="{ animationDelay: idx * 0.04 + 's', position: 'relative' }">
-          <!-- 手机端拖拽排序手柄: 纯图标无文字, 不触发 Vivo 等 ROM 的"长按识屏"弹窗;
-               按下即进入拖拽态, 桌面端用原生 HTML5 拖拽(此手柄不渲染) -->
-          <button v-if="store.isMobile" type="button" class="note-drag-handle"
-            @touchstart.stop="onNoteHandleTouchStart($event, note.id)"
-            @touchmove="onNoteTouchMove"
-            @touchend="onNoteTouchEnd"
-            @touchcancel="onNoteTouchCancel"
-            @click.stop
-            aria-label="拖动排序笔记"
-            title="拖动排序">
-            <svg class="w-4 h-4" fill="currentColor" viewBox="0 0 24 24">
-              <circle cx="9" cy="6" r="1.4"/><circle cx="15" cy="6" r="1.4"/>
-              <circle cx="9" cy="12" r="1.4"/><circle cx="15" cy="12" r="1.4"/>
-              <circle cx="9" cy="18" r="1.4"/><circle cx="15" cy="18" r="1.4"/>
-            </svg>
-          </button>
           <NoteCard
             :note="note"
             :is-selected="store.editingNote && store.editingNote.id === note.id"
@@ -286,26 +274,42 @@ function onNoteDragEnd() {
 }
 
 // ===== 触摸拖拽排序 (手机/平板, HTML5 draggable 在触摸端不触发) =====
-// 由卡片左侧的拖拽手柄触发: 纯图标、无文字, 不会触发 Vivo 等 ROM 的"长按识屏"弹窗;
-// 手柄按下即进入拖拽态(无需长按), 与 CategoryTreeNode 的分类排序手柄同一思路
-const touchDragState = { noteId: null, startY: 0, el: null, activated: false };
+// 整卡长按进入拖拽态: 按住不动 350ms = 拖拽; 一上来就滑 = 滚动(取消)。与 CategoryTreeNode 同理。
+const TOUCH_LONG_PRESS_MS = 350;
+const touchDragState = { noteId: null, startY: 0, startX: 0, el: null, activated: false, timer: null };
 
-// 手柄 touchstart: 立即进入拖拽态(图标无文字, 不触发系统识屏/长按菜单)
-function onNoteHandleTouchStart(e, noteId) {
-  if (e.touches.length !== 1 || dragNoteId.value) return;
-  e.preventDefault(); // 阻止滚动与系统对手柄图标的长按菜单
+// 整卡 touchstart: 启动长按计时器 (不 preventDefault, 保证列表可滑动)
+function onNoteTouchStart(e) {
+  if (!store.isMobile || e.touches.length !== 1 || dragNoteId.value) return;
   const t = e.touches[0];
-  touchDragState.noteId = noteId;
+  const idAttr = e.currentTarget.dataset.id;
+  if (!idAttr) return;
+  touchDragState.noteId = Number(idAttr);
   touchDragState.startY = t.clientY;
-  // 手柄的祖先中含 [data-id] 的包裹层(承载 translateY 位移与 touch-lifted 高亮)
-  touchDragState.el = e.currentTarget.closest('[data-id]');
-  touchDragState.activated = true;
-  dragNoteId.value = noteId;
-  touchDragState.el?.classList.add('touch-lifted');
+  touchDragState.startX = t.clientX;
+  touchDragState.el = e.currentTarget; // 包裹层承载 translateY 位移与 touch-lifted 高亮
+  touchDragState.activated = false;
+  clearTimeout(touchDragState.timer);
+  touchDragState.timer = setTimeout(() => {
+    if (touchDragState.noteId == null) return;
+    touchDragState.activated = true;
+    dragNoteId.value = touchDragState.noteId;
+    touchDragState.el?.classList.add('touch-lifted');
+  }, TOUCH_LONG_PRESS_MS);
 }
 
 function onNoteTouchMove(e) {
-  if (!dragNoteId.value) return;
+  if (touchDragState.noteId == null && !dragNoteId.value) return;
+  // 长按未激活: 移动超阈值 → 视为滚动, 取消
+  if (!touchDragState.activated && touchDragState.noteId != null) {
+    const dy = Math.abs(e.touches[0].clientY - touchDragState.startY);
+    const dx = Math.abs(e.touches[0].clientX - touchDragState.startX);
+    if (dy > 10 || dx > 10) {
+      clearTimeout(touchDragState.timer);
+      touchDragState.noteId = null;
+    }
+    return;
+  }
   // 拖拽中: 阻止页面滚动, 卡片跟随手指, 实时计算目标行
   e.preventDefault();
   const t = e.touches[0];
@@ -322,6 +326,7 @@ function onNoteTouchMove(e) {
 }
 
 function onNoteTouchEnd() {
+  clearTimeout(touchDragState.timer);
   const st = touchDragState;
   const fromId = dragNoteId.value;
   const toId = dragOverNoteId.value;
@@ -333,6 +338,7 @@ function onNoteTouchEnd() {
   st.noteId = null;
   st.el = null;
   st.activated = false;
+  st.timer = null;
   dragNoteId.value = null;
   dragOverNoteId.value = null;
   if (wasDragging && fromId) {
@@ -344,6 +350,7 @@ function onNoteTouchEnd() {
 }
 
 function onNoteTouchCancel() {
+  clearTimeout(touchDragState.timer);
   if (touchDragState.el) {
     touchDragState.el.classList.remove('touch-lifted');
     touchDragState.el.style.transform = '';
@@ -351,6 +358,7 @@ function onNoteTouchCancel() {
   touchDragState.noteId = null;
   touchDragState.el = null;
   touchDragState.activated = false;
+  touchDragState.timer = null;
   dragNoteId.value = null;
   dragOverNoteId.value = null;
 }
@@ -436,36 +444,6 @@ onMounted(() => {
 .note-dragging {
   opacity: 0.4;
   transition: opacity 0.15s;
-}
-/* 手机端拖拽排序手柄: 卡片左侧竖条, 纯图标不触发识屏; 仅移动端渲染(v-if isMobile) */
-.note-drag-handle {
-  position: absolute;
-  left: 1px;
-  top: 50%;
-  transform: translateY(-50%);
-  width: 24px;
-  height: 34px;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  color: var(--text-tertiary);
-  background: var(--bg-hover, rgba(0,0,0,0.04));
-  border: none;
-  border-radius: 6px;
-  cursor: grab;
-  touch-action: none; /* 手柄上不滚动/不缩放, 保证拖拽手势干净 */
-  z-index: 2;
-}
-.note-drag-handle:active {
-  color: var(--color-primary);
-  background: var(--color-primary-subtle, rgba(91,110,245,0.12));
-  cursor: grabbing;
-}
-/* 触摸设备: 卡片左侧给拖拽手柄让出空间, 标题不被手柄盖住 */
-@media (hover: none) {
-  .notelist-container :deep(.card) {
-    padding-left: 32px;
-  }
 }
 /* 触摸长按拖拽: 被拖卡片浮起 (跟随手指的位移在 JS 里以 transform 设置) */
 .touch-lifted {
