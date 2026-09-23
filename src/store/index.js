@@ -87,8 +87,6 @@ export const store = reactive({
   mobileDrawerOpen: false,
   // 手机端全屏分类页: 由顶栏汉堡按钮打开, 替代窄抽屉 (Vivo 等 ROM 长按文字会弹系统识屏, 故不再用长按看全名)
   mobileCategoryPageOpen: false,
-  // 手机端"移动笔记到分类"选择模式: 非空表示正在为某条笔记挑选目标分类
-  mobileCategoryPickNoteId: null,
   sidebarCollapsed: false, // 桌面端侧边栏折叠
   noteListCollapsed: false, // 桌面端笔记列表折叠
 
@@ -446,7 +444,6 @@ export const store = reactive({
     store.searchQuery = '';
     store.mobileDrawerOpen = false;
     store.mobileCategoryPageOpen = false;
-    store.mobileCategoryPickNoteId = null;
     store.loadNotes();
   },
 
@@ -455,7 +452,6 @@ export const store = reactive({
     store.searchQuery = '';
     store.mobileDrawerOpen = false;
     store.mobileCategoryPageOpen = false;
-    store.mobileCategoryPickNoteId = null;
     store.loadNotes();
   },
 
@@ -922,8 +918,7 @@ export const store = reactive({
     store.scheduleAutoSave();
   },
 
-  // 拖拽笔记到分类 / 手机端"移动到分类"选择模式: 直接替换笔记的分类
-  // catId 为 null 表示"移到未分类" (清空分类)
+  // 拖拽笔记到分类：直接替换笔记的分类
   async moveNoteToCategory(noteId, catId) {
     // 先记下原分类: 若当前正处于该分类视图, 移动后需把笔记从列表移除, 避免残留
     const idx = store.notes.findIndex(n => n.id === noteId);
@@ -931,17 +926,15 @@ export const store = reactive({
       ? store.notes[idx].category_ids[0]
       : undefined;
     if (idx !== -1 && oldCatId === catId) {
-      // 拖到自己的分类 / 已是未分类, 无需任何变更
-      store.mobileCategoryPickNoteId = null;
+      // 拖到自己的分类, 无需任何变更
       return;
     }
-    const payload = catId == null ? { category_ids: [] } : { category_ids: [catId] };
     try {
-      await API.updateNote(noteId, payload);
+      await API.updateNote(noteId, { category_ids: [catId] });
       // 更新本地 store 中的笔记数据 (标题/内容不变, 仅分类)
       if (idx !== -1) {
-        const cat = catId == null ? null : store.categories.find(c => c.id === catId);
-        store.notes[idx].category_ids = catId == null ? [] : [catId];
+        const cat = store.categories.find(c => c.id === catId);
+        store.notes[idx].category_ids = [catId];
         store.notes[idx].category_names = cat ? [cat.name] : [];
       }
       // 若当前正处于某个分类视图, 且被移动的笔记原来就属于该视图 → 从列表移除
@@ -952,14 +945,11 @@ export const store = reactive({
       store.noteListVersion = Date.now();
       // 刷新各分类计数 (分类节点上的角标)
       store.loadCategories();
-      const catName = catId == null ? '未分类' : (store.categories.find(c => c.id === catId)?.name || '分类');
+      const catName = store.categories.find(c => c.id === catId)?.name || '分类';
       store.showToast('已移动到「' + catName + '」');
     } catch (err) {
       console.error('移动笔记失败:', err);
       store.showToast('分类变更失败', 'error');
-    } finally {
-      // 退出手机端选择模式 (无论成功失败)
-      store.mobileCategoryPickNoteId = null;
     }
   },
 
