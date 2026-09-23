@@ -365,15 +365,20 @@ function onTouchCancel() {
   }
 }
 .cat-dragging {
-  opacity: 0.4 !important;
+  opacity: 0.35 !important;
 }
-/* 触摸长按拖拽: 被拖行浮起 (位移在 JS 里以 transform 设置) */
+/* 触摸长按拖拽: 被拖行浮起 (位移在 JS 里以 transform 设置)
+   仅用 outline + 浅底 + 阴影强调, 不动 transform, 避免覆盖 JS 的 translateY 跟手位移 */
 .cat-touch-lifted {
-  opacity: 0.85 !important;
-  box-shadow: var(--shadow-md, 0 4px 16px rgba(0,0,0,0.15)) !important;
+  opacity: 0.95 !important;
+  background: var(--color-primary-subtle, rgba(91,110,245,0.12)) !important;
+  outline: 2px solid var(--color-primary) !important;
+  outline-offset: -2px;
+  box-shadow: var(--shadow-lg, 0 8px 24px rgba(0,0,0,0.22)) !important;
+  border-radius: 10px;
   position: relative;
   z-index: 6;
-  transition: opacity 0.1s;
+  transition: box-shadow 0.1s, opacity 0.1s;
 }
 /* 触摸设备: 禁文本选择, 避免长按行弹出系统菜单 */
 @media (hover: none) {
@@ -383,20 +388,28 @@ function onTouchCancel() {
     user-select: none;
   }
 }
+/* 目标行: 清晰的"将插入到这里"提示 — 浅底 + 主色描边 + 顶部高亮插入条 */
 .cat-drop-here {
   position: relative;
-  transform: translateX(6px);
+  background: var(--color-primary-subtle, rgba(91,110,245,0.14)) !important;
+  box-shadow: inset 0 0 0 1.5px var(--color-primary) !important;
+  border-radius: 10px;
 }
 .cat-drop-here::after {
   content: '';
   position: absolute;
-  left: 8px;
-  right: 8px;
-  bottom: -3px;
-  height: 2px;
+  left: 6px;
+  right: 6px;
+  top: -4px;
+  height: 3px;
   background: var(--color-primary);
-  border-radius: 1px;
-  opacity: 0.6;
+  border-radius: 2px;
+  box-shadow: 0 0 6px var(--color-primary);
+  animation: dropPulse 0.8s ease-in-out infinite alternate;
+}
+@keyframes dropPulse {
+  from { opacity: 0.35; transform: scaleX(0.85); }
+  to { opacity: 1; transform: scaleX(1); }
 }
 
 </style>

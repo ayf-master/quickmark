@@ -442,16 +442,21 @@ onMounted(() => {
   background: var(--bg-hover);
 }
 .note-dragging {
-  opacity: 0.4;
+  opacity: 0.35;
   transition: opacity 0.15s;
 }
-/* 触摸长按拖拽: 被拖卡片浮起 (跟随手指的位移在 JS 里以 transform 设置) */
+/* 触摸长按拖拽: 被拖卡片浮起 (跟随手指的位移在 JS 里以 transform 设置)
+   仅用 outline + 浅底 + 阴影强调, 不动 transform, 避免覆盖 JS 的 translateY 跟手位移 */
 .touch-lifted {
-  opacity: 0.85 !important;
+  opacity: 0.95 !important;
+  background: var(--color-primary-subtle, rgba(91,110,245,0.12)) !important;
+  outline: 2px solid var(--color-primary) !important;
+  outline-offset: -2px;
   box-shadow: var(--shadow-xl, 0 12px 32px rgba(0,0,0,0.2)) !important;
+  border-radius: 12px;
   position: relative;
   z-index: 5;
-  transition: opacity 0.1s;
+  transition: box-shadow 0.1s, opacity 0.1s;
 }
 /* 触摸设备: 禁文本选择, 避免长按卡片弹出系统放大镜/选择菜单 */
 @media (hover: none) {
@@ -461,25 +466,27 @@ onMounted(() => {
     user-select: none;
   }
 }
+/* 目标卡片: 清晰的"将插入到这里"提示 — 浅底 + 主色描边 + 顶部高亮插入条 */
 .note-drop-here {
   position: relative;
-  transform: translateY(6px);
-  transition: transform 0.2s cubic-bezier(0.34, 1.56, 0.64, 1);
+  background: var(--color-primary-subtle, rgba(91,110,245,0.14)) !important;
+  box-shadow: inset 0 0 0 1.5px var(--color-primary) !important;
+  border-radius: 12px;
 }
 .note-drop-here::after {
   content: '';
   position: absolute;
-  left: 8px;
-  right: 8px;
-  bottom: -8px;
+  left: 10px;
+  right: 10px;
+  top: -6px;
   height: 3px;
   background: var(--color-primary);
   border-radius: 2px;
-  opacity: 0.6;
+  box-shadow: 0 0 6px var(--color-primary);
   animation: dropPulse 0.8s ease-in-out infinite alternate;
 }
 @keyframes dropPulse {
-  from { opacity: 0.3; transform: scaleY(0.8); }
-  to { opacity: 0.7; transform: scaleY(1); }
+  from { opacity: 0.35; transform: scaleX(0.85); }
+  to { opacity: 1; transform: scaleX(1); }
 }
 </style>
