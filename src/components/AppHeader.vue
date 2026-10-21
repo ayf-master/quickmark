@@ -3,7 +3,7 @@
     style="background: var(--bg-panel); border-bottom: 1px solid var(--border-default);">
     <div class="flex items-center gap-3 flex-1 min-w-0">
       <!-- 桌面端: 折叠/展开侧边栏按钮 (侧边栏折叠后显示) -->
-      <button v-if="store.isDesktop && store.sidebarCollapsed"
+      <button v-if="(store.isDesktop || store.isTablet) && store.sidebarCollapsed"
         class="btn btn-icon btn-ghost"
         @click="store.sidebarCollapsed = false"
         aria-label="展开侧边栏"

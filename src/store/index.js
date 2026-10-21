@@ -4,6 +4,7 @@
 import { reactive, computed, watch } from 'vue';
 import API from '@/api/index.js';
 import { detectContentMode } from '@/utils/content.js';
+import * as layout from '@/utils/layout.js';
 import {
   parseWikiLinks,
   findNoteByTitle,
@@ -1065,3 +1066,18 @@ watch(() => store.editContent, () => store.scheduleAutoSave());
 watch(() => store.isDesktop, (desktop) => {
   if (desktop) store.mobileDrawerOpen = false;
 });
+
+// 窗口变窄时钳制三栏宽度, 保证 分类栏+列表 不挤爆编辑器 (手机端单栏不需要)
+function clampLayoutWidths() {
+  if (viewport.width <= 720) return;
+  const avail = viewport.width - layout.MIN_EDITOR;
+  if (avail >= store.sidebarWidth + store.listWidth) return;
+  let list = Math.max(layout.MIN_LIST, avail - store.sidebarWidth);
+  let sidebar = Math.max(layout.MIN_SIDEBAR, avail - list);
+  if (sidebar !== store.sidebarWidth) store.setSidebarWidth(sidebar);
+  if (list !== store.listWidth) store.setListWidth(list);
+}
+if (typeof window !== 'undefined') {
+  window.addEventListener('resize', clampLayoutWidths, { passive: true });
+  clampLayoutWidths(); // 启动时也校一次 (localStorage 里可能存了偏大的旧宽度)
+}

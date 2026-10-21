@@ -29,7 +29,7 @@
             <path d="M16 12V4h1V2H7v2h1v8l-2 2v2h5.2v6h1.6v-6H18v-2l-2-2z"/>
           </svg>
         </button>
-        <button v-if="store.isDesktop"
+        <button v-if="store.isDesktop || store.isTablet"
           class="btn btn-icon-sm btn-ghost flex-shrink-0"
           @click="store.noteListCollapsed = !store.noteListCollapsed"
           :title="store.noteListCollapsed ? '展开列表' : '折叠列表'">
@@ -159,7 +159,7 @@
     </div>
   </section>
   <!-- 展开按钮 (贴在右侧边缘) -->
-  <button v-if="store.isDesktop && store.noteListCollapsed"
+  <button v-if="(store.isDesktop || store.isTablet) && store.noteListCollapsed"
     class="notelist-expand-btn"
     @click="store.noteListCollapsed = false"
     title="展开列表">
@@ -197,8 +197,8 @@ watch(() => features.spacedRepetition, async (val) => {
 const containerStyle = computed(() => {
   if (store.isDesktop || store.isTablet) {
     const collapsed = store.noteListCollapsed;
-    // 平板空间紧, 列表宽度压缩到 260px
-    const width = store.isTablet ? '260px' : 'var(--list-width)';
+    // 平板与桌面统一走变量驱动宽度, 分隔条拖拽才生效
+    const width = 'var(--list-width)';
     return {
       width: collapsed ? '0px' : width,
       flexShrink: '0',

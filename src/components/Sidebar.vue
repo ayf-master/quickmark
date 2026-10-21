@@ -15,7 +15,7 @@
     aria-label="侧边导航"
     :aria-modal="store.isMobile ? 'true' : 'false'">
     <!-- 顶部栏目标题头: 与笔记列表/编辑器的头部同高 (h-14), 三栏视觉对齐 -->
-    <div v-if="store.isDesktop" class="h-14 flex-shrink-0 flex items-center justify-between px-5"
+    <div v-if="store.isDesktop || store.isTablet" class="h-14 flex-shrink-0 flex items-center justify-between px-5"
       style="border-bottom: 1px solid var(--border-default);">
       <h2 class="text-lg font-semibold" style="color: var(--text-primary);">分类</h2>
       <button
@@ -162,10 +162,10 @@ const sidebarStyle = computed(() => {
     // 步进: 桌面 18px, 平板 14px (平板空间更紧)
     const step = store.isTablet ? 14 : 18;
     const extra = store.maxExpandedDepth * step;
-    const baseWidth = store.isTablet ? '200px' : 'var(--sidebar-width)';
+    // 平板也走变量驱动宽度, 保证分隔条拖拽生效 (宽度由 App.vue/store 提供)
     const finalWidth = store.sidebarCollapsed
       ? '0px'
-      : `calc(${baseWidth} + ${extra}px)`;
+      : `calc(var(--sidebar-width) + ${extra}px)`;
     return {
       width: finalWidth,
       flexShrink: '0',
