@@ -102,6 +102,7 @@
           @touchmove="onNoteTouchMove"
           @touchend="onNoteTouchEnd"
           @touchcancel="onNoteTouchCancel"
+          @contextmenu.prevent
           :class="['fade-in-up', { 'note-dragging': dragNoteId === note.id, 'note-drop-here': dragOverNoteId === note.id }]"
           :style="{ animationDelay: idx * 0.04 + 's', position: 'relative' }">
           <NoteCard
@@ -276,7 +277,12 @@ function onNoteDragEnd() {
 // ===== 触摸拖拽排序 (手机/平板, HTML5 draggable 在触摸端不触发) =====
 // 整卡长按进入拖拽态: 按住不动 350ms = 拖拽; 一上来就滑 = 滚动(取消)。与 CategoryTreeNode 同理。
 const TOUCH_LONG_PRESS_MS = 350;
-const touchDragState = { noteId: null, startY: 0, startX: 0, el: null, activated: false, timer: null };
+// 长按计时器触发前, 手指移动超过此值才判定为"滚动列表"并放弃拖拽。
+// 必须 < 浏览器滚动手势阈值(约 8px, touch slop): 只有在该阈值内 preventDefault 才能拦住浏览器滚动;
+// 之前设 20px 反而让 8~20px 落进"浏览器已开滚、preventDefault 无效"的失效区 —— 这才是手机端拖拽偶发失效的真正根因。
+// 设 6px: 手指基本静止(微动 <6px)即能稳定进入拖拽; 明显移动(>6px)则判定为滚动并放行。
+const TOUCH_MOVE_TOLERANCE = 6;
+const touchDragState = { noteId: null, startY: 0, startX: 0, el: null, scrollEl: null, activated: false, timer: null };
 
 // 整卡 touchstart: 启动长按计时器 (不 preventDefault, 保证列表可滑动)
 function onNoteTouchStart(e) {
@@ -288,6 +294,7 @@ function onNoteTouchStart(e) {
   touchDragState.startY = t.clientY;
   touchDragState.startX = t.clientX;
   touchDragState.el = e.currentTarget; // 包裹层承载 translateY 位移与 touch-lifted 高亮
+  touchDragState.scrollEl = e.currentTarget.closest('.panel-scroll'); // 拖拽态要锁定的滚动容器
   touchDragState.activated = false;
   clearTimeout(touchDragState.timer);
   touchDragState.timer = setTimeout(() => {
@@ -295,18 +302,25 @@ function onNoteTouchStart(e) {
     touchDragState.activated = true;
     dragNoteId.value = touchDragState.noteId;
     touchDragState.el?.classList.add('touch-lifted');
+    // 锁定列表滚动, 防止拖拽中浏览器把纵向手势判为滚动而发 touchcancel 打断裂拽
+    if (touchDragState.scrollEl) touchDragState.scrollEl.style.overflow = 'hidden';
   }, TOUCH_LONG_PRESS_MS);
 }
 
 function onNoteTouchMove(e) {
   if (touchDragState.noteId == null && !dragNoteId.value) return;
-  // 长按未激活: 移动超阈值 → 视为滚动, 取消
+  // 长按未激活: 判断手指移动意图
   if (!touchDragState.activated && touchDragState.noteId != null) {
     const dy = Math.abs(e.touches[0].clientY - touchDragState.startY);
     const dx = Math.abs(e.touches[0].clientX - touchDragState.startX);
-    if (dy > 10 || dx > 10) {
+    if (dy > TOUCH_MOVE_TOLERANCE || dx > TOUCH_MOVE_TOLERANCE) {
+      // 明显移动 = 用户想滚动列表, 取消长按拖拽, 放行原生滚动
       clearTimeout(touchDragState.timer);
       touchDragState.noteId = null;
+    } else {
+      // 小幅移动(含手指自然抖动): 拦截滚动, 但**不取消计时器** —— 给 350ms 长按触发机会
+      // (之前移动 >10px 就取消, 导致手指轻微滑动即误判为滚动、拖拽起不来 —— 手机端偶发失效主因)
+      e.preventDefault();
     }
     return;
   }
@@ -315,12 +329,31 @@ function onNoteTouchMove(e) {
   const t = e.touches[0];
   const shift = t.clientY - touchDragState.startY;
   if (touchDragState.el) touchDragState.el.style.transform = `translateY(${shift}px)`;
-  const fingerY = t.clientY;
+  // 目标命中: 与桌面端 dragover 一致 —— 高亮"被拖卡片视觉中心此刻悬停在哪一张上"。
+  // 用被拖卡片视觉中心(含 translateY)判定, 而非手指位置, 避免手机端卡片跟手位移致下方卡片提前变蓝;
+  // 遍历跳过被拖卡片自身 + 中线语义, 方向无关、稳定命中(顶部拖到底部方向性失效根因已修)。
   let target = null;
+  const draggedRect = touchDragState.el ? touchDragState.el.getBoundingClientRect() : null;
+  const draggedCenter = draggedRect ? draggedRect.top + draggedRect.height / 2 : t.clientY;
   for (const el of noteEls.value) {
-    if (!el) continue;
+    if (!el || el === touchDragState.el) continue;
     const r = el.getBoundingClientRect();
-    if (fingerY >= r.top && fingerY <= r.bottom) { target = el.dataset.id; break; }
+    if (draggedCenter >= r.top && draggedCenter <= r.bottom) { target = el.dataset.id; break; }
+  }
+  if (!target) {
+    // 卡片中心在两行间隙 → 取"中心下方的第一张卡片"之前(中线语义)
+    for (const el of noteEls.value) {
+      if (!el || el === touchDragState.el) continue;
+      const r = el.getBoundingClientRect();
+      if (draggedCenter < r.top + r.height / 2) { target = el.dataset.id; break; }
+    }
+  }
+  if (!target) {
+    // 在所有卡片之下 → 落到最后一张(非被拖)
+    for (let i = noteEls.value.length - 1; i >= 0; i--) {
+      const el = noteEls.value[i];
+      if (el && el !== touchDragState.el) { target = el.dataset.id; break; }
+    }
   }
   dragOverNoteId.value = target && target !== String(dragNoteId.value) ? Number(target) : null;
 }
@@ -334,9 +367,11 @@ function onNoteTouchEnd() {
     st.el.classList.remove('touch-lifted');
     st.el.style.transform = '';
   }
+  if (st.scrollEl) st.scrollEl.style.overflow = ''; // 恢复列表滚动
   const wasDragging = st.activated;
   st.noteId = null;
   st.el = null;
+  st.scrollEl = null;
   st.activated = false;
   st.timer = null;
   dragNoteId.value = null;
@@ -355,8 +390,10 @@ function onNoteTouchCancel() {
     touchDragState.el.classList.remove('touch-lifted');
     touchDragState.el.style.transform = '';
   }
+  if (touchDragState.scrollEl) touchDragState.scrollEl.style.overflow = ''; // 恢复列表滚动
   touchDragState.noteId = null;
   touchDragState.el = null;
+  touchDragState.scrollEl = null;
   touchDragState.activated = false;
   touchDragState.timer = null;
   dragNoteId.value = null;
@@ -466,9 +503,11 @@ onMounted(() => {
     user-select: none;
   }
 }
-/* 目标卡片: 清晰的"将插入到这里"提示 — 浅底 + 主色描边 + 顶部高亮插入条 */
+/* 目标卡片: 清晰的"将插入到这里"提示 — 浅底 + 主色描边 + 顶部高亮插入条
+   z-index 提到被拖卡片之上, 避免被跟手的浮起卡片盖住而看不到提示 */
 .note-drop-here {
   position: relative;
+  z-index: 6;
   background: var(--color-primary-subtle, rgba(91,110,245,0.14)) !important;
   box-shadow: inset 0 0 0 1.5px var(--color-primary) !important;
   border-radius: 12px;
