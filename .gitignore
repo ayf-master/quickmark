@@ -45,6 +45,10 @@ coverage/
 .cache/
 .parcel-cache/
 .turbo/
+.npm-cache/
+
+# vite 6 构建验证探针输出 (临时目录, 用完删)
+dist-v6check/
 
 # 阶段 5 验证探针
 /prisma/verify-claim.js
@@ -52,5 +56,3 @@ coverage/
 # 临时文件
 *.tmp
 .workbuddy/
-
-package-lock.json
