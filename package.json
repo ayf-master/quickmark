@@ -67,6 +67,9 @@
   "overrides": {
     "vitest": {
       "vite": "$vite"
+    },
+    "@vitest/mocker": {
+      "vite": "$vite"
     }
   }
 }
