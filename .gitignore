@@ -50,6 +50,12 @@ coverage/
 # vite 6 构建验证探针输出 (临时目录, 用完删)
 dist-v6check/
 
+# ==================== E2E (Playwright) ==================
+# 浏览器二进制 (本地用 PLAYWRIGHT_BROWSERS_PATH 指到项目内时的落点; 默认位置在用户目录)
+.playwright-browsers/
+test-results/
+playwright-report/
+
 # 阶段 5 验证探针
 /prisma/verify-claim.js
 

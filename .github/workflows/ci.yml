@@ -10,7 +10,7 @@ concurrency:
 
 jobs:
   test-and-build:
-    name: 单测 + 构建门禁
+    name: 单测 + E2E + 构建门禁
     runs-on: ubuntu-latest
     timeout-minutes: 15
     steps:
@@ -35,6 +35,20 @@ jobs:
 
       - name: 生产构建 (清 dist + vite build)
         run: npm run build
+
+      - name: 缓存 Playwright 浏览器
+        uses: actions/cache@v4
+        with:
+          path: ~/.cache/ms-playwright
+          key: playwright-${{ runner.os }}-${{ hashFiles('package-lock.json') }}
+
+      - name: 安装 Playwright Chromium (国内镜像加速)
+        run: npx playwright install chromium --with-deps
+        env:
+          PLAYWRIGHT_DOWNLOAD_HOST: https://cdn.npmmirror.com/binaries/playwright
+
+      - name: E2E 测试 (Playwright, 桌面+手机视口, API 全 mock)
+        run: npx playwright test
 
       - name: 上传构建产物 (便于验收/回查)
         if: success()

@@ -18,6 +18,7 @@
     "prisma:reset": "prisma migrate reset",
     "prisma:studio": "prisma studio",
     "test": "vitest run",
+    "test:e2e": "playwright test",
     "test:sm2": "node test/sm2.test.js",
     "test:pool": "USE_PRISMA=0 node test/integration.js",
     "test:prisma": "USE_PRISMA=1 node test/integration.js",
@@ -49,6 +50,7 @@
     "vue": "^3.4.21"
   },
   "devDependencies": {
+    "@playwright/test": "^1.64.1",
     "@vitejs/plugin-vue": "^6.0.0",
     "@vue/test-utils": "^2.4.11",
     "autoprefixer": "^10.5.2",
