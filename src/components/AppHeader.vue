@@ -263,12 +263,14 @@
 </template>
 
 <script setup>
-import { ref, computed, watch, nextTick, onMounted, onUnmounted } from 'vue';
+import { ref, computed, watch, nextTick, onMounted, onUnmounted, defineAsyncComponent } from 'vue';
 import { store } from '@/store';
 import { features, setFeature, refreshDueNotes } from '@/store/features.js';
 import ThemeToggle from '@/components/ThemeToggle.vue';
 import FeaturePanel from '@/components/FeaturePanel.vue';
-import CanvasBoard from '@/components/CanvasBoard.vue';
+// 异步加载: featureManifest 里已注册为按需组件, 这里若静态 import 会把它打进主包,
+// 导致 "dynamically imported but also statically imported" 警告 + 懒加载失效
+const CanvasBoard = defineAsyncComponent(() => import('@/components/CanvasBoard.vue'));
 import GanttChart from '@/components/GanttChart.vue';
 
 const isAdmin = computed(() => store.currentUser?.role === 'admin');
