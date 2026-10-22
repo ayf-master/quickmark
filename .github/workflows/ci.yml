@@ -1,0 +1,45 @@
+name: CI
+
+on:
+  push:
+  pull_request:
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  test-and-build:
+    name: 单测 + 构建门禁
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+
+      - name: 安装依赖 (npm ci, 严格按 package-lock.json 复现)
+        run: npm ci
+
+      - name: 生成 Prisma client
+        run: npx prisma generate
+
+      - name: 单元测试 (vitest)
+        run: npm test
+
+      - name: SM-2 算法脚本测试
+        run: npm run test:sm2
+
+      - name: 生产构建 (清 dist + vite build)
+        run: npm run build
+
+      - name: 上传构建产物 (便于验收/回查)
+        if: success()
+        uses: actions/upload-artifact@v4
+        with:
+          name: dist
+          path: dist/
+          retention-days: 7
