@@ -33,6 +33,8 @@ export default defineConfig({
     command: 'npm run dev',
     url: 'http://localhost:5173',
     reuseExistingServer: !process.env.CI,
-    timeout: 60_000
+    // 首次运行要优化依赖(esbuild), 留足余量; 若 5173 被僵死的旧 dev server 占着,
+    // vite(strictPort)会起不来 → 杀掉旧进程或重试即可
+    timeout: 120_000
   }
 });
