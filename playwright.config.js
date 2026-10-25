@@ -4,6 +4,14 @@ import { defineConfig, devices } from '@playwright/test';
 // 不依赖真实后端/数据库, 因此 CI 里无需起 MySQL。
 // 取舍说明: 用 dev server 而非 preview(dist) — 保证跑的就是当前源码, 不会因忘了 build
 // 而测到旧产物; 被测行为(DOM 事件/store 逻辑/请求载荷)在 dev/prod 下一致。
+//
+// 本地首次使用需装浏览器(约 250MB, 一次性):
+//   npx playwright install chromium
+// 国内直连 cdn.playwright.dev 很慢, 用 npmmirror 镜像(PowerShell):
+//   $env:PLAYWRIGHT_DOWNLOAD_HOST = "https://cdn.npmmirror.com/binaries/playwright"
+//   npx playwright install chromium
+// 注意: 必须在项目目录 D:\vibeCoding\quickmark 下执行, npx 才会用本项目版本的
+// playwright, 浏览器修订号才对得上; CI 里已在 workflow 内配好镜像, 无需手动。
 export default defineConfig({
   testDir: './e2e',
   fullyParallel: true,
