@@ -2,6 +2,7 @@ name: CI
 
 on:
   push:
+    branches: [master]   # feature 分支由 PR 触发, 避免 push+PR 重复跑两遍 CI
   pull_request:
 
 concurrency:
@@ -12,7 +13,7 @@ jobs:
   test-and-build:
     name: 单测 + E2E + 构建门禁
     runs-on: ubuntu-latest
-    timeout-minutes: 15
+    timeout-minutes: 30   # Chromium 下载偶尔慢, 15m 曾误杀正常 run
     steps:
       - uses: actions/checkout@v4
 
