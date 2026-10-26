@@ -6,6 +6,33 @@
 
 ---
 
+## 实际进度快照（截至 2026-10-26）
+
+原路线图把工作切成阶段 0–7 + P2。截至今日，**主体功能线（0–6）已全部完成**，监控线（7）完成 Pino + Sentry（env-gated）+ 健康检查增强 + pm2 日志轮转；Prometheus 指标端点尚未做。另外补了一整条"工程质量 D 线"（原路线图没规划，属上线前补课）：测试基座、CI、E2E、安全清理、分支保护。
+
+| 原阶段 | 主题 | 现状 |
+|--------|------|------|
+| 0 | 配置管理 | ✅ 完成（.env + .gitignore + 启停校验 requireEnv） |
+| 1 | 前端拆分 Vue3+Vite | ✅ 完成（src/ 多 SFC + Vite 工程） |
+| 2 | 数据库迁移工具 | ✅ 完成（Prisma + prisma/migrations/） |
+| 3 | ORM 替换直写 SQL | ✅ 完成（prisma/dal.js，双轨 pool 回退保留） |
+| 4 | 鉴权 + 安全 | ✅ 完成（users 表 + JWT + helmet + rate-limit + CSRF） |
+| 5 | 旧数据迁移 + 收尾 | ✅ 完成（owner_id 归属，legacy 关闭） |
+| 6 | 缓存 Redis | ✅ 完成（src/utils/cache.js + ioredis，优雅降级） |
+| 7 | 监控 / 日志 | 🟡 部分：Pino ✅、Sentry(env-gated) ✅、健康检查增强 ✅、pm2 日志轮转 ✅；Prometheus 指标端点 ⬜ |
+
+### 工程质量 D 线（原路线图未规划，上线前补课，已全部完成）
+- **D1 测试基座**：Vitest 80 个单测 + happy-dom；`pool:'vmForks'` 解决沙箱 RPC 阻塞。
+- **D2 CI 门禁**：GitHub Actions `ci.yml`，`npm ci` → prisma generate → vitest → SM-2 → build → Playwright → 上传 dist 产物；Playwright 走国内镜像加速。
+- **D3 E2E**：Playwright 桌面(1440×900)+手机(Pixel 5) 双视口，7 个用例（登录 / 自动保存 / 桌面拖拽 / 移动长按），接口全 mock。
+- **D4 可观测性**：后端 Sentry（仅 `SENTRY_DSN` 存在时启用，无 DSN 零开销）；`/api/health` 增强（db 状态 / uptime / version / timestamp，DB 挂返回 500 让 LB 判死）；服务器 `pm2-logrotate`（10M 轮转、保留 30、压缩）。
+- **安全清理（公开仓库前）**：仓库内硬编码密钥清零；生产 DB 密码 + QQ SMTP 授权码已轮换；`.env` 不入库。
+- **分支保护**：master 已开保护（强制 PR + CI 通过 + 管理员也遵守，禁止强推 / 删分支）。
+
+> 启用提示：Sentry 需在 `.env` 配 `SENTRY_DSN` 才会真正上报（未配则全程 no-op，不影响性能）；Prometheus 指标端点（`/metrics`）是阶段 7 里唯一未做的项，需要时再补 `prom-client`。
+
+---
+
 ## 项目现状（基线）
 
 - **后端**：Node.js + Express 4.18，`server.js` 421 行，14 个 API 端点
@@ -419,8 +446,9 @@ model Note {
 - 多人协作编辑（Y.js）
 - 全文搜索（Meilisearch）
 - 移动端 PWA
-- CI/CD（GitHub Actions）
-- Docker Compose 部署文件
+- ~~CI/CD（GitHub Actions）~~ → ✅ 已完成（见 D2）
+- Docker Compose 部署文件 → ✅ 已有（docker-compose.yml）
 - README / 用户文档
+- Prometheus 指标端点 `/metrics`（阶段 7 唯一未做项）
 
-做完这 5 项后再排 P2 优先级。
+做完主体 + D 线后，按上面优先级排 P2。
