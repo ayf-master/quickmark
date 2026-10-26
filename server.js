@@ -16,11 +16,14 @@ const multer = require('multer');
 const cookieParser = require('cookie-parser');
 const cache = require('./src/utils/cache');
 const logger = require('./src/utils/logger');
+const sentry = require('./src/utils/sentry');
 const helmet = require('helmet');
 const settingsDAL = require('./prisma/settings');
 
 // 加载 .env (本地开发用, 生产环境由进程管理器/systemd 注入环境变量)
 require('dotenv').config();
+
+sentry.initSentry();
 
 const app = express();
 const PORT = process.env.PORT || 3000;
@@ -83,6 +86,11 @@ app.use(helmet({
   contentSecurityPolicy: false,            // Vue 内联模板风格较多, 留待前端调
   crossOriginResourcePolicy: { policy: 'cross-origin' }  // /uploads 图片允许跨域
 }));
+
+// 阶段 7: Sentry 请求追踪 (仅当 SENTRY_DSN 已配置时启用, 否则 getSentry() 返回 null)
+if (sentry.getSentry()) {
+  app.use(sentry.getSentry().Handlers.requestHandler());
+}
 
 // 阶段 4: 鉴权中间件 (解析 cookie → req.user, 不强制登录)
 
@@ -197,12 +205,18 @@ app.post('/api/upload', upload.single('file'), (req, res) => {
   }
 });
 
+// 阶段 7: Sentry 错误捕获 (4 参错误中间件, 必须放在其它错误处理之前)
+if (sentry.getSentry()) {
+  app.use(sentry.getSentry().Handlers.errorHandler());
+}
+
 app.use((err, req, res, next) => {
   if (err instanceof multer.MulterError) {
     return res.status(400).json({ error: '上传错误: ' + err.message });
   }
   if (err) {
     logger.error('请求错误:', err.message);
+    sentry.captureException(err);
     return res.status(400).json({ error: err.message });
   }
   next();
@@ -211,16 +225,25 @@ app.use((err, req, res, next) => {
 // ==================== 健康检查 (Prisma 模式专有) ====================
 
 app.get('/api/health', async (req, res) => {
+  const base = {
+    status: 'ok',
+    mode: USE_PRISMA ? 'prisma' : 'pool',
+    uptime: process.uptime(),
+    version: process.env.APP_VERSION || '1.0.0',
+    timestamp: new Date().toISOString()
+  };
   try {
     if (USE_PRISMA) {
       await prismaModule.ping();
-      res.json({ status: 'ok', mode: 'prisma' });
     } else {
-      const [rows] = await pool.query('SELECT 1 AS ok');
-      res.json({ status: 'ok', mode: 'pool', db: rows[0] });
+      await pool.query('SELECT 1');
     }
+    base.db = 'up';
+    res.json(base);
   } catch (err) {
-    res.status(500).json({ status: 'error', error: err.message });
+    // 依赖 (DB) 不可用 → 返回 500 + db:down, 让监控/LB 判定为不健康
+    sentry.captureException(err, { tags: { label: 'health-check' } });
+    res.status(500).json({ ...base, status: 'error', db: 'down', error: err.message });
   }
 });
 
@@ -228,6 +251,7 @@ app.get('/api/health', async (req, res) => {
 
 function handleApiError(res, err, label) {
   logger.error(`${label} 失败:`, err);
+  sentry.captureException(err, { tags: { label } });
   const status = err.statusCode || 500;
   res.status(status).json({ error: err.message || `${label}失败` });
 }
