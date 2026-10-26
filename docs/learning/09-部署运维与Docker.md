@@ -157,7 +157,7 @@ DATABASE_URL=mysql://root:xxx@localhost:3306/quickmark
 JWT_SECRET=xxxxx              # 32+ 位随机串
 SMTP_HOST=smtp.qq.com         # 邮件服务
 SMTP_USER=3351247805@qq.com
-SMTP_PASS=mjlfdycfnxiachjj    # QQ 邮箱授权码（不是登录密码！）
+SMTP_PASS=你的邮箱授权码    # QQ 邮箱授权码（不是登录密码！切勿提交真实值）
 ```
 
 ### 5.2 QQ 邮箱授权码（邮件功能的关键）

@@ -39,7 +39,7 @@ node -e "const p=require('@prisma/client'); const c=new p.PrismaClient(); c.user
 
 ```bash
 cd D:\vibeCoding\quickmark
-mysqldump -h localhost -u root -payf147852369 --single-transaction --routines --triggers \
+mysqldump -h localhost -u root -p你的数据库密码 --single-transaction --routines --triggers \
   --databases quickmark \
   > docs/migrations/backup-2026-06-25-pre-claim.sql
 ```
@@ -47,7 +47,7 @@ mysqldump -h localhost -u root -payf147852369 --single-transaction --routines --
 ### Step 2: 执行 forward 迁移
 
 ```bash
-mysql -h localhost -u root -payf147852369 quickmark < docs/migrations/v4-claim-legacy-data.sql
+mysql -h localhost -u root -p你的数据库密码 quickmark < docs/migrations/v4-claim-legacy-data.sql
 ```
 
 ### Step 3: 验证
@@ -66,13 +66,13 @@ node prisma/_probes/verify-after-claim.js
 如发现迁移有误, 一行命令还原:
 
 ```bash
-mysql -h localhost -u root -payf147852369 < docs/migrations/backup-2026-06-25-pre-claim.sql
+mysql -h localhost -u root -p你的数据库密码 < docs/migrations/backup-2026-06-25-pre-claim.sql
 ```
 
 **或**精确反向操作 (不还原 dump 但只撤数据删除):
 
 ```bash
-mysql -h localhost -u root -payf147852369 quickmark < docs/migrations/v4-claim-legacy-data.rollback.sql
+mysql -h localhost -u root -p你的数据库密码 quickmark < docs/migrations/v4-claim-legacy-data.rollback.sql
 ```
 
 ## 不在范围

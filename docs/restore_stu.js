@@ -8,7 +8,7 @@ const { execSync } = require('child_process');
 const fs = require('fs');
 const path = require('path');
 
-const MYSQL = '"D:/mysql/mysql-8.0.31-winx64/bin/mysql" -u root -payf147852369';
+const MYSQL = '"D:/mysql/mysql-8.0.31-winx64/bin/mysql" -u root -p你的数据库密码';
 const DATA = 'D:/mysql/mysql-8.0.31-winx64/data';
 const BACKUP = 'D:/mysql-ibd-backup';  // 先备份原始的 .ibd
 
