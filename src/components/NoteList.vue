@@ -95,6 +95,7 @@
           ref="noteEls"
           :draggable="!store.isMobile"
           @dragstart="onNoteDragStart($event, note.id)"
+          @dragenter.prevent="onNoteDragOver($event, note.id)"
           @dragover.prevent="onNoteDragOver($event, note.id)"
           @drop.prevent="onNoteDrop($event, note.id)"
           @dragend="onNoteDragEnd"

@@ -12,7 +12,7 @@
 - **数据库**：MySQL（mysql2/promise），库名 `quickmark`，字符集 `utf8mb4`
 - **依赖**：cors / express / multer / mysql2（4 个，无构建工具、无 ORM）
 - **认证**：**无**（任何人都能访问所有 API）
-- **配置**：密码硬编码在 `server.js:13`（`ayf147852369`）
+- **配置**：密码硬编码在 `server.js:13`（`你的数据库密码`）
 - **迁移**：仅 `db/init.js`（一次性建库，schema.sql 是一坨 SQL）
 - **前端**：800+ 行的 `note-editor.js` 单文件（模板/setup/style 全混）
 - **部署**：单机 `node server.js` + nohup

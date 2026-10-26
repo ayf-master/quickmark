@@ -30,7 +30,15 @@ export default defineConfig({
   test: {
     environment: 'happy-dom',
     globals: true,
-    include: ['src/**/*.test.js', 'test/unit/**/*.test.js']
+    // 门禁只收 vitest 单测; 以下两个是纯 Node 脚本(无 describe/it), 由各自 npm script 跑:
+    //   test/sm2.test.js      -> npm run test:sm2   (assert 风格算法校验)
+    //   test/integration.js   -> npm run test:pool / test:prisma (需真起服务+数据库)
+    include: ['src/**/*.test.js', 'test/**/*.test.js'],
+    exclude: ['**/node_modules/**', '**/dist/**', 'test/integration.js', 'test/sm2.test.js'],
+    // 固定 vmForks 池: 默认 forks 池依赖子进程 RPC 传输, 在部分环境(如沙箱/CI)会被阻断,
+    // 报 "Cannot read properties of undefined (reading 'config')" 的假错; vm 池走 vm.SourceTextModule,
+    // 行为一致且跨环境稳定, 单测场景无功能差异
+    pool: 'vmForks'
   },
   build: {
     outDir: 'dist',

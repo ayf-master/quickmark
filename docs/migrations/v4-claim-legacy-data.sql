@@ -16,7 +16,7 @@
 -- 净变化: notes -5, categories -2, users -1
 --
 -- ⚠️ 执行前请先 mysqldump 留底:
---   mysqldump -h localhost -u root -payf147852369 --single-transaction \
+--   mysqldump -h localhost -u root -p你的数据库密码 --single-transaction \
 --     --databases quickmark > docs/migrations/backup-2026-06-25-pre-claim.sql
 -- ========================================================================
 

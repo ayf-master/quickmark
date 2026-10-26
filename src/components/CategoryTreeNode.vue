@@ -8,6 +8,7 @@
       @touchend="onTouchEnd"
       @touchcancel="onTouchCancel"
       @dragstart="onDragStart"
+      @dragenter.prevent="onDragOver"
       @dragover.prevent="onDragOver"
       @dragleave="onNoteDragLeave"
       @drop.prevent="onDrop"

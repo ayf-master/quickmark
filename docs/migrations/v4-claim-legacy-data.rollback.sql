@@ -13,7 +13,7 @@
 --
 -- ⚠️ 注意: 此 rollback 假设 forward 脚本尚未被外部修改覆盖
 --   如 forward 后又有新数据写入, 请用 backup dump 还原:
---       mysql -h localhost -u root -payf147852369 < docs/migrations/backup-2026-06-25-pre-claim.sql
+--       mysql -h localhost -u root -p你的数据库密码 < docs/migrations/backup-2026-06-25-pre-claim.sql
 -- ========================================================================
 
 START TRANSACTION;

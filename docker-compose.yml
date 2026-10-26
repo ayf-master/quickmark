@@ -4,7 +4,7 @@ services:
     container_name: quickmark-db
     restart: always
     environment:
-      MYSQL_ROOT_PASSWORD: ${DB_PASSWORD:-ayf147852369}
+      MYSQL_ROOT_PASSWORD: ${DB_PASSWORD:?请在 .env 设置 DB_PASSWORD}
       MYSQL_DATABASE: ${DB_NAME:-quickmark}
       MYSQL_CHARACTER_SET_SERVER: utf8mb4
       MYSQL_COLLATION_SERVER: utf8mb4_unicode_ci
@@ -43,9 +43,9 @@ services:
       DB_HOST: db
       DB_PORT: 3306
       DB_USER: root
-      DB_PASSWORD: ${DB_PASSWORD:-ayf147852369}
+      DB_PASSWORD: ${DB_PASSWORD:?请在 .env 设置 DB_PASSWORD}
       DB_NAME: ${DB_NAME:-quickmark}
-      DATABASE_URL: mysql://root:${DB_PASSWORD:-ayf147852369}@db:3306/${DB_NAME:-quickmark}
+      DATABASE_URL: mysql://root:${DB_PASSWORD:?请在 .env 设置 DB_PASSWORD}@db:3306/${DB_NAME:-quickmark}
       JWT_SECRET: ${JWT_SECRET}
       JWT_ISSUER: quickmark
       JWT_AUDIENCE: quickmark-web
@@ -56,7 +56,7 @@ services:
       SMTP_PORT: "465"
       SMTP_SECURE: "true"
       SMTP_USER: 3351247805@qq.com
-      SMTP_PASS: mjlfdycfnxiachjj
+      SMTP_PASS: ${SMTP_PASS:?请在 .env 设置 SMTP_PASS}
       MAIL_FROM: "QuickMark <3351247805@qq.com>"
     ports:
       - "3000:3000"
